@@ -1,0 +1,3 @@
+sp 0 0
+sdump ./dump_files/dump1.bin 0x60640018 0x13880
+sdump ./dump_files/profile1.bin 0x60696248 0x960
