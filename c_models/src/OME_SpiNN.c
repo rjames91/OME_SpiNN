@@ -41,9 +41,12 @@ REAL conchaL,conchaH,conchaG,earCanalL,earCanalH,earCanalG,stapesH,stapesL,stape
 	ARtau,ARdelay,ARrateThreshold,rateToAttenuationFactor,BFlength;
 
 REAL concha_q,concha_j,concha_k,concha_l,conchaGainScalar,recip_conchaFilter_a0,
-	earCanal_q,earCanal_j,earCanal_k,earCanal_l,earCanalGainScalar,recip_earCanalFilter_a0;
+	earCanal_q,earCanal_j,earCanal_k,earCanal_l,earCanalGainScalar,recip_earCanalFilter_a0,
+	ARatt,Wn,stapesHP_order,sf,stapesLP_b,stapes_tau,past_stapesDisp;
 
-REAL conchaFilter_b[3],conchaFilter_a[3],earCanalFilter_b[3],earCanalFilter_a[3],past_input[2],past_concha[2];
+REAL conchaFilter_b[3],conchaFilter_a[3],earCanalFilter_b[3],earCanalFilter_a[3],stapesHP_b[3],stapesHP_a[3],stapesLP_a[2],past_input[2],past_concha[2],past_earCanalInput[2],past_earCanal[2],past_stapesInput[2]
+,past_stapes[2];
+
 
 //uint seed_selection[SEED_SEL_SIZE];//TODO:this needs to be moved to SDRAM
 
@@ -64,7 +67,6 @@ REAL *dtcm_profile_buffer;
 REAL *sdramin_buffer;
 REAL *sdramout_buffer;
 REAL *profile_buffer;
-
 
 //application initialisation
 void app_init(void)
@@ -165,7 +167,7 @@ void app_init(void)
 	earCanalG=5.0;
 	stapesH=700.0;
 	stapesL=10.0;
-	stapesScalar=50e-8;
+	stapesScalar=5e-7;
 	ARtau=0.2;
 	ARdelay=0.0085;
 	ARrateThreshold=100.0;
@@ -196,13 +198,41 @@ void app_init(void)
 	earCanalFilter_b[2]=-earCanal_j;
 	earCanalFilter_a[0]=1.0;
 	earCanalFilter_a[1]=-earCanal_k;
-	earCanalFilter_a[2]=-earCanal_l;	
+	earCanalFilter_a[2]=-earCanal_l;
+	recip_earCanalFilter_a0=1.0/earCanalFilter_a[0];
+
+	//stapes filter coeffs hard coded due to butterworth calc code overflow
+	//N.B. these will need to be altered if Fs is changed!!!
+	stapesHP_b[0] = 0.931905;
+	stapesHP_b[1] = -1.863809;
+	stapesHP_b[2] = 0.931905;
+	stapesHP_a[0] = 1.0;
+	stapesHP_a[1] = -1.859167;
+	stapesHP_a[2] = 0.868451;
+
+	stapes_tau= 1.0/ (2 * PI * stapesL);
+	stapesLP_a[0]= 1.0;
+	stapesLP_a[1]= dt/stapes_tau -1.0;
+	stapesLP_b= 1.0 + stapesLP_a[1];
 
 	past_input[0]=0.0;
 	past_input[1]=0.0;
 	past_concha[0]=0.0;
 	past_concha[1]=0.0;
-	
+
+	past_earCanalInput[0]=0.0;
+	past_earCanalInput[1]=0.0;
+	past_earCanal[0]=0.0;
+	past_earCanal[1]=0.0;
+
+	ARatt=1.0; //TODO: change this to be determined by spiking input
+
+	past_stapesInput[0]=0.0;
+	past_stapesInput[1]=0.0;
+	past_stapes[0]=0.0;
+	past_stapes[1]=0.0;
+
+	past_stapesDisp=0.0;		
 
 #ifdef PROFILE
     // configure timer 2 for profiling
@@ -301,7 +331,7 @@ uint process_chan(REAL *out_buffer,REAL *in_buffer)
 	uint i,j,k;
 		
 	uint si=0;
-	REAL concha,earCanalInput,earCanalRes;
+	REAL concha,earCanalInput,earCanalRes,earCanalOutput,ARoutput,stapesVelocity,stapesDisplacement;
 		
 #ifdef PRINT
 	io_printf (IO_BUF, "[core %d] segment %d (offset=%d) starting processing\n", coreID,seg_index,segment_offset);
@@ -324,10 +354,44 @@ uint process_chan(REAL *out_buffer,REAL *in_buffer)
 
 		earCanalInput= conchaGainScalar* concha + in_buffer[i];
 
+		//ear canal
+		earCanalRes= (earCanalFilter_b[0]*earCanalInput
+				+ earCanalFilter_b[1]*past_earCanalInput[0]
+				+ earCanalFilter_b[2]*past_earCanalInput[1]
+				- earCanalFilter_a[1]*past_earCanal[0]
+				- earCanalFilter_a[2]*past_earCanal[1]) * recip_earCanalFilter_a0;
+		//update vars	
+		past_earCanalInput[1]=past_earCanalInput[0];
+		past_earCanalInput[0]=earCanalInput;
+	
+		past_earCanal[1]=past_earCanal[0];
+		past_earCanal[0]=earCanalRes;
+
+		earCanalOutput= earCanalGainScalar * earCanalRes + earCanalInput;
+
+		//AR
+		ARoutput= ARatt * stapesScalar * earCanalOutput;
+
+		//stapes velocity
+		stapesVelocity= stapesHP_b[0] * ARoutput + 
+				stapesHP_b[1] * past_stapesInput[0] + 
+				stapesHP_b[2] * past_stapesInput[1] 
+				- stapesHP_a[1] * past_stapes[0]
+				- stapesHP_a[2] * past_stapes[1];
+		//update vars
+		past_stapesInput[1]= past_stapesInput[0];
+		past_stapesInput[0]= ARoutput;
+		past_stapes[1]= past_stapes[0];
+		past_stapes[0]= stapesVelocity;
+
+		//stapes displacement
+		stapesDisplacement= stapesLP_b * stapesVelocity - stapesLP_a[1] * past_stapesDisp;
+		//update vars
+		past_stapesDisp=stapesDisplacement;	
 	
 		//save to buffer
-		out_buffer[i]=earCanalInput;//linout2*lin_gain + nonlinout2b;
-		//out_buffer[i]=compressedNonlin;//nlin_b0;//nonlinout1a;//nonlinout2b;//linout1;//nonlinout1a;
+		out_buffer[i]=stapesDisplacement;
+		//out_buffer[i]=stapesVelocity;//nlin_b0;//nonlinout1a;//nonlinout2b;//linout1;//nonlinout1a;
 	}
 		
 	return segment_offset;
