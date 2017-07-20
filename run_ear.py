@@ -1,22 +1,25 @@
 import numpy
-from mcmc import mcmc_framework
-from mcmc_examples.lighthouse.lighthouse_model import LightHouseModel
+import model_launch_framework
+#from mcmc_examples.lighthouse.lighthouse_model import LightHouseModel
 from scipy.io import wavfile
-
-# Data to use for 10 data points
-data_points = [
-    2.37706, 4.51142, 0.406605, 0.909418, 0.642899,
-    1.21925, 1.47647, -2.95771, -0.801802, -1.86529
-]
+import pylab as plt
 
 
-# Run and get the samples
-model = LightHouseModel(
-    alpha_jump_scale, alpha_min, alpha_max, beta_jump_scale, beta_min,
-    beta_max)
-samples = mcmc_framework.run_mcmc(
-    model, data_points, n_samples, seed=seed, n_chips=23*48)
+#fs, audio_data=wavfile.read('4kHz_40dB.wav')
+
+audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
+
+#plt.figure()
+#plt.plot(audio_data)
+#plt.show()
+
+
+#TODO: create auditory model vertex instances
+
+#create framework of connected model vertices and run
+samples = model_launch_framework.run_model(
+    audio_data, n_chips=4,n_drnl=2,CF=[4000, 4100],n_ihcan=5,fs=44100,resample_factor=1)
 
 # Save the results
-numpy.save("results.npy", samples)
-numpy.savetxt("results.csv", samples, fmt="%f", delimiter=",")
+#numpy.save("results.npy", samples)
+#numpy.savetxt("results.csv", samples, fmt="%f", delimiter=",")

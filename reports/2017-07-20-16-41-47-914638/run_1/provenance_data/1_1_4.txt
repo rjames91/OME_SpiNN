@@ -1,0 +1,5 @@
+[core 4] -----------------------
+[core 4] starting simulation
+[INFO]    (src/data_specification.c:  38): SDRAM data begins at address: 60246170
+[INFO]    (spinn_IHC_AN_softfloat_MAP_pipe.c: 220): IHCAN key=8
+

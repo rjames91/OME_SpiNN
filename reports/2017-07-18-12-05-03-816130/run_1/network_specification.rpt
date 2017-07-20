@@ -1,0 +1,6 @@
+*** Vertices:
+Vertex OME Node, model: OMEVertex
+    Constraints:
+        ChipAndCoreConstraint(x=0, y=0, p=None)
+    Outgoing Edge Partitions:
+

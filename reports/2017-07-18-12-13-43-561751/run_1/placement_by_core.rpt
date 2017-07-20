@@ -1,0 +1,11 @@
+        Placement Information by Core
+        =============================
+
+Generated: Tue Jul 18 12:13:48 2017 for target machine '192.168.240.253'
+
+**** Chip: (0, 0)
+Application cores: 18
+  Processor 2: Vertex: 'OME Node' 
+              Model: OMEVertex
+
+

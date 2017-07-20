@@ -1,7 +1,9 @@
 import spinnaker_graph_front_end as g
 
-from .OME_vertex import OMEVertex
-from model_binaries import model_binaries
+from OME_vertex import OMEVertex
+from DRNL_vertex import DRNLVertex
+from IHCAN_vertex import IHCANVertex
+import model_binaries
 
 from pacman.model.constraints.placer_constraints\
     .chip_and_core_constraint import ChipAndCoreConstraint
@@ -19,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_model(
-        data, n_chips=None):
+        data, n_chips=None,n_drnl=0,CF=[4000],n_ihcan=0,fs=44100,resample_factor=1):
     """ Executes an MCMC model, returning the received samples
 
     :param data: The audio input data
@@ -34,72 +36,67 @@ def run_model(
     n_cores = 0
     machine = g.machine()
 
-    # Create a coordinator for each board
-    coordinators = dict()
+    # Create a OME for each chip
+    omes = dict()
+    drnls = dict()
+    ihcans = dict()
     boards = dict()
-    for chip in machine.ethernet_connected_chips:
-
+    for chip in machine.chips:
         #create OME
-        ome=OMEVertex()
+        ome=OMEVertex(data)
 
-        # Create a coordinator
-        coordinator = MCMCCoordinatorVertex(
-            data, n_samples, burn_in, thinning,
-            degrees_of_freedom, seed)
-        g.add_machine_vertex_instance(coordinator)
+        g.add_machine_vertex_instance(ome)
 
-        # Put the coordinator on the Ethernet chip
-        coordinator.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-        coordinators[chip.x, chip.y] = coordinator
+        # constrain placement to local chip
+        ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
+        omes[chip.x, chip.y] = ome
         boards[chip.x, chip.y] = chip.ip_address
 
-    # Go through all the chips and add the workhorses
-    n_workers = 0
-    for chip in machine.chips:
+        #create DRNLs
+        for i in range(n_drnl):
+            drnl=DRNLVertex(ome,CF[i])
+            g.add_machine_vertex_instance(drnl)
+            # constrain placement to local chip
+            drnl.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
+            drnls[chip.x, chip.y,i] = drnl
 
-        # Count the cores in the processor
-        # (-1 if this chip also has a coordinator)
-        n_cores = len([p for p in chip.processors if not p.is_monitor])
-        if (chip.x, chip.y) in coordinators:
-            n_cores -= 1
+            for j in range(n_ihcan):
+                ihcan=IHCANVertex(drnl,fs,resample_factor)
+                g.add_machine_vertex_instance(ihcan)
+                # constrain placement to local chip
+                ihcan.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
+                ihcans[chip.x, chip.y,j] = ihcan
+                # Add an edge from the DRNL to the IHCAN, to send the data
+                g.add_machine_edge_instance(
+                    MachineEdge(drnl, ihcan),
+                    drnl.data_partition_name)
 
-        # Find the coordinator for the board (or 0, 0 if it is missing)
-        eth_x = chip.nearest_ethernet_x
-        eth_y = chip.nearest_ethernet_y
-        coordinator = coordinators.get((eth_x, eth_y))
-        if coordinator is None:
-            print "Warning - couldn't find {}, {}".format(eth_x, eth_y)
-            coordinator = coordinators[0, 0]
+                # Add an edge from the IHCAN to the DRNL,
+                # to send acknowledgement
+                g.add_machine_edge_instance(
+                    MachineEdge(ihcan, drnl),
+                    drnl.acknowledge_partition_name)
 
-        # Add a vertex for each core
-        for _ in range(n_cores):
-
-            # Create the vertex and add it to the graph
-            vertex = MCMCVertex(coordinator, model)
-            n_workers += 1
-            g.add_machine_vertex_instance(vertex)
-
-            # Put the vertex on the same board as the coordinator
-            vertex.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-
-            # Add an edge from the coordinator to the vertex, to send the data
+            # Add an edge from the OME to the DRNL, to send the data
             g.add_machine_edge_instance(
-                MachineEdge(coordinator, vertex),
-                coordinator.data_partition_name)
+                MachineEdge(ome, drnl),
+                ome.data_partition_name)
 
-            # Add an edge from the vertex to the coordinator,
+            # Add an edge from the DRNL to the OME,
             # to send acknowledgement
             g.add_machine_edge_instance(
-                MachineEdge(vertex, coordinator),
-                coordinator.acknowledge_partition_name)
+                MachineEdge(drnl, ome),
+                ome.acknowledge_partition_name)
 
-    # Run the simulation
+
+
+# Run the simulation
     g.run(None)
 
     # Wait for the application to finish
     txrx = g.transceiver()
     app_id = globals_variables.get_simulator()._app_id
-    logger.info("Running {} worker cores".format(n_workers))
+    #logger.info("Running {} worker cores".format(n_workers))
     logger.info("Waiting for application to finish...")
     running = txrx.get_core_state_count(app_id, CPUState.RUNNING)
     while running > 0:
@@ -114,9 +111,9 @@ def run_model(
 
     # Get the data back
     samples = list()
-    for coordinator in coordinators.itervalues():
+    '''for coordinator in coordinators.itervalues():
         samples.append(coordinator.read_samples(g.buffer_manager()))
-    samples = numpy.hstack(samples)
+    samples = numpy.hstack(samples)'''
 
     # Close the machine
     g.stop()

@@ -1,0 +1,21 @@
+        Placement Information by Vertex
+        ===============================
+
+Generated: Wed Jul 19 10:13:22 2017 for target machine '192.168.240.253'
+
+**** Vertex: 'OME Node'
+Model: OMEVertex
+ Placed on core (0, 0, 2)
+
+**** Vertex: 'OME Node'
+Model: OMEVertex
+ Placed on core (0, 1, 2)
+
+**** Vertex: 'OME Node'
+Model: OMEVertex
+ Placed on core (1, 0, 2)
+
+**** Vertex: 'OME Node'
+Model: OMEVertex
+ Placed on core (1, 1, 2)
+

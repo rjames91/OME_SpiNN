@@ -1,3 +1,10 @@
 sp 0 0
-sdump ./dump_files/dump1.bin 0x60640018 0x13880
-sdump ./dump_files/profile1.bin 0x60696248 0x960
+
+sdump ./dump_files/dump_input.bin 0x60240070 0x60e0
+
+sdump ./dump_files/dumpome.bin 0x60258358 0x60e0
+
+sdump ./dump_files/dumpdrnl.bin 0x602522d8 0x60e0
+
+sdump ./dump_files/dump1.bin 0x602461e0 0xc1c0
+

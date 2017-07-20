@@ -1,0 +1,24 @@
+Vertex: OME Node
+    Partition: OMEData, Routing Info: [KeyAndMask:0xeL:0xfffffffe]
+Vertex: DRNL Node
+    Partition: OMEDataAck, Routing Info: [KeyAndMask:0x2L:0xffffffff]
+Vertex: DRNL Node
+    Partition: OMEDataAck, Routing Info: [KeyAndMask:0x6L:0xffffffff]
+Vertex: OME Node
+    Partition: OMEData, Routing Info: [KeyAndMask:0x8L:0xfffffffe]
+Vertex: DRNL Node
+    Partition: OMEDataAck, Routing Info: [KeyAndMask:0xbL:0xffffffff]
+Vertex: DRNL Node
+    Partition: OMEDataAck, Routing Info: [KeyAndMask:0x0L:0xffffffff]
+Vertex: OME Node
+    Partition: OMEData, Routing Info: [KeyAndMask:0x4L:0xfffffffe]
+Vertex: DRNL Node
+    Partition: OMEDataAck, Routing Info: [KeyAndMask:0x7L:0xffffffff]
+Vertex: DRNL Node
+    Partition: OMEDataAck, Routing Info: [KeyAndMask:0xaL:0xffffffff]
+Vertex: OME Node
+    Partition: OMEData, Routing Info: [KeyAndMask:0xcL:0xfffffffe]
+Vertex: DRNL Node
+    Partition: OMEDataAck, Routing Info: [KeyAndMask:0x1L:0xffffffff]
+Vertex: DRNL Node
+    Partition: OMEDataAck, Routing Info: [KeyAndMask:0x3L:0xffffffff]

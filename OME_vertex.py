@@ -22,6 +22,10 @@ from spinn_front_end_common.interface.buffer_management \
 from spinn_front_end_common.utilities.utility_objs.executable_start_type \
     import ExecutableStartType
 
+from spinn_front_end_common.abstract_models\
+    .abstract_provides_n_keys_for_partition \
+    import AbstractProvidesNKeysForPartition
+
 from enum import Enum
 import numpy
 
@@ -29,12 +33,13 @@ import numpy
 class OMEVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
-        AbstractReceiveBuffersToHost):
-    """ A vertex that runs the MCMC algorithm
+        AbstractProvidesNKeysForPartition
+        ):
+    """ A vertex that runs the OME algorithm
     """
 
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 16
+    _N_PARAMETER_BYTES = 4*4
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
@@ -46,7 +51,8 @@ class OMEVertex(
     # the data type of the coreID
     _COREID_TYPE = DataType.UINT32
 
-    def __init__(self, data):#TODO:add Fs to params
+    def __init__(self, data,data_partition_name="OMEData",
+            acknowledge_partition_name="OMEDataAck"):#TODO:add Fs to params
         """
 
         :param coordinator: The coordinator vertex
@@ -55,9 +61,12 @@ class OMEVertex(
 
         MachineVertex.__init__(self, label="OME Node", constraints=None)
         self._data = data
+        self._data_partition_name = data_partition_name
+        self._acknowledge_partition_name = acknowledge_partition_name
 
         self._drnl_vertices = list()
-        self._mcmc_placements = list()
+        self._drnl_placements = list()
+        self._data_receiver = dict()
 
         self._data_size = (
             (len(self._data) * self._DATA_ELEMENT_TYPE.size) +
@@ -67,8 +76,21 @@ class OMEVertex(
             self._N_PARAMETER_BYTES + self._data_size
         )
 
+    @property
+    def data_partition_name(self):
+        return self._data_partition_name
+
+    @property
+    def acknowledge_partition_name(self):
+        return self._acknowledge_partition_name
+
     def register_processor(self, drnl_vertex):
         self._drnl_vertices.append(drnl_vertex)
+
+    def get_acknowledge_key(self, placement, routing_info):
+        key = routing_info.get_first_key_from_pre_vertex(
+            placement.vertex, self._acknowledge_partition_name)
+        return key
 
     @property
     def n_data_points(self):
@@ -89,11 +111,12 @@ class OMEVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
-        return "OME.aplx"()
+        return "OME.aplx"
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
         return ExecutableStartType.SYNC
+
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
@@ -108,7 +131,7 @@ class OMEVertex(
 
         # Reserve and write the parameters region
         region_size = self._N_PARAMETER_BYTES + self._data_size
-        region_size += len(self._mcmc_vertices) * self._KEY_ELEMENT_TYPE.size
+        region_size += len(self._drnl_vertices) * self._KEY_ELEMENT_TYPE.size
         spec.reserve_memory_region(0, region_size)
         spec.switch_write_focus(0)
 
@@ -118,10 +141,9 @@ class OMEVertex(
         for vertex in self._drnl_vertices:
             drnl_placement = placements.get_placement_of_vertex(vertex)
             self._drnl_placements.append(drnl_placement)
-            if self._is_receiver_placement(drnl_placement):
-                key = routing_info.get_first_key_from_pre_vertex(
-                    vertex, self._acknowledge_partition_name)
-                keys.append(key)
+            key = routing_info.get_first_key_from_pre_vertex(
+                vertex, self._acknowledge_partition_name)
+            keys.append(key)
         keys.sort()
 
         # Write the data size in words
@@ -133,9 +155,29 @@ class OMEVertex(
         spec.write_value(
             placement.p, data_type=self._COREID_TYPE)
 
+        print "OME placement=",placement.p
+
+        # Write number of drnls
+        spec.write_value(
+            len(self._drnl_vertices), data_type=self._COREID_TYPE)
+            #2, data_type = self._COREID_TYPE)
+
+        # Write the key
+        if len(keys)>0:
+            routing_info = routing_info.get_routing_info_from_pre_vertex(
+                self, self._data_partition_name)
+            spec.write_value(routing_info.first_key, data_type=DataType.UINT32)
+        else:
+            spec.write_value(0, data_type=DataType.UINT32)
+
+
         # Write the data - Arrays must be 32-bit values, so convert
         data = numpy.array(self._data, dtype=self._NUMPY_DATA_ELEMENT_TYPE)
         spec.write_array(data.view(numpy.uint32))
 
         # End the specification
         spec.end_specification()
+
+    @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
+    def get_n_keys_for_partition(self, partition, graph_mapper):
+        return len(self._drnl_vertices)

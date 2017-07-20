@@ -1,0 +1,45 @@
+        Placement Information by Core
+        =============================
+
+Generated: Wed Jul 19 10:55:01 2017 for target machine '192.168.240.253'
+
+**** Chip: (0, 0)
+Application cores: 18
+  Processor 2: Vertex: 'OME Node' 
+              Model: OMEVertex
+
+
+  Processor 3: Vertex: 'DRNL Node' 
+              Model: DRNLVertex
+
+
+**** Chip: (0, 1)
+Application cores: 18
+  Processor 2: Vertex: 'OME Node' 
+              Model: OMEVertex
+
+
+  Processor 3: Vertex: 'DRNL Node' 
+              Model: DRNLVertex
+
+
+**** Chip: (1, 0)
+Application cores: 18
+  Processor 2: Vertex: 'OME Node' 
+              Model: OMEVertex
+
+
+  Processor 3: Vertex: 'DRNL Node' 
+              Model: DRNLVertex
+
+
+**** Chip: (1, 1)
+Application cores: 18
+  Processor 2: Vertex: 'OME Node' 
+              Model: OMEVertex
+
+
+  Processor 3: Vertex: 'DRNL Node' 
+              Model: DRNLVertex
+
+
