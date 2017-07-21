@@ -1,10 +1,32 @@
 sp 0 0
 
-sdump ./dump_files/dump_input.bin 0x60240070 0x60e0
+sdump ./dump_files/dump_input.bin 0x60240250 0x2ee0
 
-sdump ./dump_files/dumpome.bin 0x60258358 0x60e0
+sdump ./dump_files/dumpome.bin 0x6028ec3c 0x2ee0
 
-sdump ./dump_files/dumpdrnl.bin 0x602522d8 0x60e0
+sdump ./dump_files/dumpdrnl1.bin 0x60264900 0x2ee0
 
-sdump ./dump_files/dump1.bin 0x602461e0 0xc1c0
+sdump ./dump_files/dump1.bin 0x60258800 0x5dc0
+
+sdump ./dump_files/dump2.bin 0x60273a44 0x5dc0
+
+sdump ./dump_files/dump3.bin 0x6024363c 0x5dc0
+
+sdump ./dump_files/dump4.bin 0x602496bc 0x5dc0
+
+sdump ./dump_files/dump5.bin 0x6026d9c4 0x5dc0
+
+sdump ./dump_files/dumpdrnl2.bin 0x6024f73c 0x2ee0
+
+sdump ./dump_files/dump6.bin 0x60252780 0x5dc0
+
+sdump ./dump_files/dump7.bin 0x6027fb44 0x5dc0
+
+sdump ./dump_files/dump8.bin 0x60267944 0x5dc0
+
+sdump ./dump_files/dump9.bin 0x60279ac4 0x5dc0
+
+sdump ./dump_files/dump10.bin 0x6025e880 0x5dc0
+
+
 

@@ -18,8 +18,10 @@ audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
 
 #create framework of connected model vertices and run
 samples = model_launch_framework.run_model(
-    audio_data, n_chips=4,n_drnl=2,CF=[4000, 4100],n_ihcan=5,fs=44100,resample_factor=1)
+    audio_data, n_chips=1,n_drnl=2,CF=[4000, 4100],n_ihcan=5,fs=22050,resample_factor=1)
 
 # Save the results
-#numpy.save("results.npy", samples)
-#numpy.savetxt("results.csv", samples, fmt="%f", delimiter=",")
+numpy.save("results.npy", samples)
+numpy.savetxt("results.csv", samples, fmt="%f", delimiter=",")
+
+

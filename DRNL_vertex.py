@@ -25,15 +25,22 @@ from spinn_front_end_common.utilities.utility_objs.executable_start_type \
 from enum import Enum
 import numpy
 
+from spinn_front_end_common.abstract_models\
+    .abstract_provides_n_keys_for_partition \
+    import AbstractProvidesNKeysForPartition
+
+from spinn_machine.utilities.progress_bar import ProgressBar
+
 
 class DRNLVertex(
         MachineVertex, AbstractHasAssociatedBinary,
-        AbstractGeneratesDataSpecification,
+        AbstractGeneratesDataSpecification#,
+       # AbstractProvidesNKeysForPartition
         ):
     """ A vertex that runs the DRNL algorithm
     """
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 8*4
+    _N_PARAMETER_BYTES = 9*4
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
@@ -56,6 +63,7 @@ class DRNLVertex(
         self._ome = ome
         self._ome.register_processor(self)
         self._CF=CF
+        self._fs=ome.fs
 
         self._ihcan_vertices = list()
         self._ihcan_placements = list()
@@ -85,6 +93,10 @@ class DRNLVertex(
     @property
     def n_data_points(self):
         return self._num_data_points
+
+    @property
+    def fs(self):
+        return self._fs
 
     @property
     def data_partition_name(self):
@@ -202,6 +214,8 @@ class DRNLVertex(
         # Write the centre frequency
         spec.write_value(self._CF,data_type=DataType.UINT32)
 
+        # Write the sampling frequency
+        spec.write_value(self._fs,data_type=DataType.UINT32)
 
         print "DRNL OME placement=",OME_placement
 
@@ -210,3 +224,22 @@ class DRNLVertex(
         # End the specification
         spec.end_specification()
 
+  #  @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
+  #  def get_n_keys_for_partition(self, partition, graph_mapper):
+  #      return len(self._ihcan_vertices)
+
+    def read_samples(self, buffer_manager):
+        """ Read back the samples
+        """
+        progress = ProgressBar(len(self._ihcan_placements), "Reading results")
+        samples = list()
+        for placement in self._ihcan_placements:
+
+            # Read the data recorded
+            samples.append(
+                placement.vertex.read_samples(buffer_manager, placement))
+            progress.update()
+        progress.end()
+
+        # Merge all the arrays
+        return numpy.hstack(samples)

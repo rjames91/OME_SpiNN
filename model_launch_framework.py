@@ -43,7 +43,7 @@ def run_model(
     boards = dict()
     for chip in machine.chips:
         #create OME
-        ome=OMEVertex(data)
+        ome=OMEVertex(data,fs)
 
         g.add_machine_vertex_instance(ome)
 
@@ -61,7 +61,7 @@ def run_model(
             drnls[chip.x, chip.y,i] = drnl
 
             for j in range(n_ihcan):
-                ihcan=IHCANVertex(drnl,fs,resample_factor)
+                ihcan=IHCANVertex(drnl,resample_factor)
                 g.add_machine_vertex_instance(ihcan)
                 # constrain placement to local chip
                 ihcan.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
@@ -111,9 +111,9 @@ def run_model(
 
     # Get the data back
     samples = list()
-    '''for coordinator in coordinators.itervalues():
-        samples.append(coordinator.read_samples(g.buffer_manager()))
-    samples = numpy.hstack(samples)'''
+    for drnl in drnls.itervalues():
+        samples.append(drnl.read_samples(g.buffer_manager()))
+    samples = numpy.hstack(samples)
 
     # Close the machine
     g.stop()

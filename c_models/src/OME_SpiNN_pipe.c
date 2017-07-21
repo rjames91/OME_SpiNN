@@ -20,7 +20,6 @@
 #include "log.h"
 #include <data_specification.h>
 
-#define TIMER_TICK_PERIOD 4500//2600//2300//REALTIME (2.3ms to process 100 44100Hz samples
 
 //#define TOTAL_TICKS 62//240//173//197
 #define PROFILE
@@ -39,6 +38,7 @@ uint processing;
 uint index_x;
 uint index_y;
 uint TOTAL_TICKS;
+uint TIMER_TICK_PERIOD;
 
 REAL conchaL,conchaH,conchaG,earCanalL,earCanalH,earCanalG,stapesH,stapesL,stapesScalar,
 	ARtau,ARdelay,ARrateThreshold,rateToAttenuationFactor,BFlength;
@@ -78,6 +78,7 @@ enum params {
     DATA_SIZE = 0,
     COREID,
     NUM_DRNL,
+    FS,
     KEY,
     DATA
     };
@@ -95,11 +96,12 @@ uint key;
 
 uint num_drnls;
 
+uint sampling_frequency;
+
 //application initialisation
 void app_init(void)
 {
-	Fs=SAMPLING_FREQUENCY;//TODO:change this to parameter
-	dt=(1.0/Fs);
+
 	seg_index=0;
 	read_switch=0;
 	write_switch=0;
@@ -134,9 +136,19 @@ void app_init(void)
     num_drnls=params[NUM_DRNL];
     io_printf (IO_BUF, "num drnls=%d\n",num_drnls);
 
+    //Get sampling frequency
+    sampling_frequency = params[FS];
+
+    Fs= (REAL)sampling_frequency;
+    dt=(1.0/Fs);
+
+    //real-time timer period calculation (us)
+    TIMER_TICK_PERIOD = (uint)(1e6 * ((REAL)SEGSIZE/Fs));
+    log_info("timer period=%d",(uint)TIMER_TICK_PERIOD);
+    log_info("Fs=%d",sampling_frequency);
+
 
 	// Allocate buffers somewhere in SDRAM
-
 	
 	//output results buffer
 	sdramout_buffer = (REAL *) sark_xalloc (sv->sdram_heap,
@@ -596,10 +608,10 @@ void c_main()
   coreID = spin1_get_core_id ();
   chipID = spin1_get_chip_id ();
 
+  app_init();
+
   //set timer tick
   spin1_set_timer_tick (TIMER_TICK_PERIOD);
-
-  app_init();
 
   //setup callbacks
   //process channel once data input has been read to DTCM

@@ -29,6 +29,8 @@ from spinn_front_end_common.abstract_models\
 from enum import Enum
 import numpy
 
+from spinn_machine.utilities.progress_bar import ProgressBar
+
 
 class OMEVertex(
         MachineVertex, AbstractHasAssociatedBinary,
@@ -39,7 +41,7 @@ class OMEVertex(
     """
 
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 4*4
+    _N_PARAMETER_BYTES = 5*4
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
@@ -51,7 +53,7 @@ class OMEVertex(
     # the data type of the coreID
     _COREID_TYPE = DataType.UINT32
 
-    def __init__(self, data,data_partition_name="OMEData",
+    def __init__(self, data,fs,data_partition_name="OMEData",
             acknowledge_partition_name="OMEDataAck"):#TODO:add Fs to params
         """
 
@@ -63,6 +65,7 @@ class OMEVertex(
         self._data = data
         self._data_partition_name = data_partition_name
         self._acknowledge_partition_name = acknowledge_partition_name
+        self._fs=fs
 
         self._drnl_vertices = list()
         self._drnl_placements = list()
@@ -95,6 +98,9 @@ class OMEVertex(
     @property
     def n_data_points(self):
         return len(self._data)
+    @property
+    def fs(self):
+        return self._fs
 
     @property
     @overrides(MachineVertex.resources_required)
@@ -162,6 +168,10 @@ class OMEVertex(
             len(self._drnl_vertices), data_type=self._COREID_TYPE)
             #2, data_type = self._COREID_TYPE)
 
+        # Write the sampling frequency
+        spec.write_value(
+            self._fs, data_type=DataType.UINT32)
+
         # Write the key
         if len(keys)>0:
             routing_info = routing_info.get_routing_info_from_pre_vertex(
@@ -169,7 +179,6 @@ class OMEVertex(
             spec.write_value(routing_info.first_key, data_type=DataType.UINT32)
         else:
             spec.write_value(0, data_type=DataType.UINT32)
-
 
         # Write the data - Arrays must be 32-bit values, so convert
         data = numpy.array(self._data, dtype=self._NUMPY_DATA_ELEMENT_TYPE)
@@ -181,3 +190,19 @@ class OMEVertex(
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
         return len(self._drnl_vertices)
+
+    def read_samples(self, buffer_manager):
+        """ Read back the samples
+        """
+        progress = ProgressBar(len(self._drnl_placements), "Reading results")
+        samples = list()
+        for placement in self._drnl_placements:
+
+            # Read the data recorded
+            samples.append(
+                placement.vertex.read_samples(buffer_manager))
+            progress.update()
+        progress.end()
+
+        # Merge all the arrays
+        return numpy.hstack(samples)

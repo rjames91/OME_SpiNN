@@ -1,7 +1,0 @@
-[core 3] -----------------------
-[core 3] starting simulation
-[INFO]    (src/data_specification.c:  38): SDRAM data begins at address: 60240018
-[INFO]    (DRNL_SpiNN_pipe.c: 152): num_ihcans=1
-
-[INFO]    (DRNL_SpiNN_pipe.c: 154): DRNL-->IHCAN key=15
-

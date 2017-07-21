@@ -45,7 +45,7 @@ class IHCANVertex(
     # the data type of the coreID
     _COREID_TYPE = DataType.UINT32
 
-    def __init__(self, drnl,fs,resample_factor):#TODO:add Fs to params
+    def __init__(self, drnl,resample_factor):#TODO:add Fs to params
         """
 
         :param ome: The connected ome vertex
@@ -55,8 +55,9 @@ class IHCANVertex(
         self._drnl = drnl
         self._drnl.register_processor(self)
         self._resample_factor=resample_factor
-        self._fs=fs
+        self._fs=drnl.fs
         self._num_data_points = 2 * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
+        self._recording_size = self._num_data_points * 4
 
 
         self._data_size = (
@@ -157,6 +158,15 @@ class IHCANVertex(
         spec.write_value(
             self._fs, data_type=self._COREID_TYPE)
 
+        # Reserve and write the recording regions
+        spec.reserve_memory_region(
+            1,
+            recording_utilities.get_recording_header_size(1))
+        spec.switch_write_focus(1)
+        ip_tags = tags.get_ip_tags_for_vertex(self) or []
+        spec.write_array(recording_utilities.get_recording_header_array(
+            [self._recording_size], ip_tags=ip_tags))
+
 
         print "IHCAN DRNL placement=",DRNL_placement
 
@@ -165,3 +175,31 @@ class IHCANVertex(
         # End the specification
         spec.end_specification()
 
+    def read_samples(self, buffer_manager, placement):
+        """ Read back the spikes """
+
+        # Read the data recorded
+        data_values, _ = buffer_manager.get_data_for_vertex(placement, 0)
+        data = data_values.read_all()
+
+        numpy_format=list()
+
+        numpy_format.append(("AN",numpy.float32))
+
+        # Convert the data into an array of state variables
+        return numpy.array(data, dtype=numpy.uint8).view(numpy_format)
+        #return numpy.array(data, dtype=numpy.float32).view(numpy_format)
+
+    def get_minimum_buffer_sdram_usage(self):
+        return 1024
+
+    def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
+        return recording_utilities.get_n_timesteps_in_buffer_space(
+            buffer_space, 4)
+
+    def get_recorded_region_ids(self):
+        return [0]
+
+    def get_recording_region_base_address(self, txrx, placement):
+        return helpful_functions.locate_memory_region_for_placement(
+            placement, 1, txrx)
