@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_model(
-        data, n_chips=None,n_drnl=0,CF=[4000],n_ihcan=0,fs=44100,resample_factor=1):
+        data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,fs=44100,resample_factor=1):
     """ Executes an MCMC model, returning the received samples
 
     :param data: The audio input data
@@ -37,56 +37,83 @@ def run_model(
     machine = g.machine()
 
     # Create a OME for each chip
-    omes = dict()
-    drnls = dict()
-    ihcans = dict()
+    #omes = dict()
+    #drnls = dict()
+    #ihcans = dict()
     boards = dict()
+
+    #changed to lists to ensure data is read back in the same order that verticies are instantiated
+    omes=list()
+    drnls=list()
+    ihcans=list()
+
+    cf_index=0
+    count=0
     for chip in machine.chips:
-        #create OME
-        ome=OMEVertex(data,fs)
+        if count >= n_chips:
+            break
+        else:
+            #create OME
+            ome=OMEVertex(data,fs)
 
-        g.add_machine_vertex_instance(ome)
+            g.add_machine_vertex_instance(ome)
 
-        # constrain placement to local chip
-        ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-        omes[chip.x, chip.y] = ome
-        boards[chip.x, chip.y] = chip.ip_address
-
-        #create DRNLs
-        for i in range(n_drnl):
-            drnl=DRNLVertex(ome,CF[i])
-            g.add_machine_vertex_instance(drnl)
             # constrain placement to local chip
-            drnl.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-            drnls[chip.x, chip.y,i] = drnl
+            ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
+            #omes[chip.x, chip.y] = ome
+            omes.append(ome)
+            boards[chip.x, chip.y] = chip.ip_address
 
-            for j in range(n_ihcan):
-                ihcan=IHCANVertex(drnl,resample_factor)
-                g.add_machine_vertex_instance(ihcan)
+            #obtain the next 2 frequencies from pole_freqs
+            #if cf_index+1<len(pole_freqs):
+            #    CF=[pole_freqs[cf_index],pole_freqs[cf_index+1]]
+            #else:# odd number of frequency channels repeat final one twice
+            #    CF = [pole_freqs[cf_index], pole_freqs[cf_index]]
+            #if cf_index<len(pole_freqs)-2:
+            #    cf_index=cf_index+2
+
+            #create DRNLs
+            for i in range(n_drnl):
+
+                CF=pole_freqs[cf_index]
+                cf_index=cf_index+1
+                drnl=DRNLVertex(ome,CF)
+                g.add_machine_vertex_instance(drnl)
                 # constrain placement to local chip
-                ihcan.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-                ihcans[chip.x, chip.y,j] = ihcan
-                # Add an edge from the DRNL to the IHCAN, to send the data
-                g.add_machine_edge_instance(
-                    MachineEdge(drnl, ihcan),
-                    drnl.data_partition_name)
+                drnl.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
+               #drnls[chip.x, chip.y,i] = drnl
+                drnls.append(drnl)
 
-                # Add an edge from the IHCAN to the DRNL,
+                for j in range(n_ihcan):
+                    ihcan=IHCANVertex(drnl,resample_factor)
+                    g.add_machine_vertex_instance(ihcan)
+                    # constrain placement to local chip
+                    ihcan.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
+                    #ihcans[chip.x, chip.y,j] = ihcan
+                    ihcans.append(ihcan)
+                    # Add an edge from the DRNL to the IHCAN, to send the data
+                    g.add_machine_edge_instance(
+                        MachineEdge(drnl, ihcan),
+                        drnl.data_partition_name)
+
+                    # Add an edge from the IHCAN to the DRNL,
+                    # to send acknowledgement
+                    g.add_machine_edge_instance(
+                        MachineEdge(ihcan, drnl),
+                        drnl.acknowledge_partition_name)
+
+                # Add an edge from the OME to the DRNL, to send the data
+                g.add_machine_edge_instance(
+                    MachineEdge(ome, drnl),
+                    ome.data_partition_name)
+
+                # Add an edge from the DRNL to the OME,
                 # to send acknowledgement
                 g.add_machine_edge_instance(
-                    MachineEdge(ihcan, drnl),
-                    drnl.acknowledge_partition_name)
+                    MachineEdge(drnl, ome),
+                    ome.acknowledge_partition_name)
 
-            # Add an edge from the OME to the DRNL, to send the data
-            g.add_machine_edge_instance(
-                MachineEdge(ome, drnl),
-                ome.data_partition_name)
-
-            # Add an edge from the DRNL to the OME,
-            # to send acknowledgement
-            g.add_machine_edge_instance(
-                MachineEdge(drnl, ome),
-                ome.acknowledge_partition_name)
+            count=count+1
 
 
 
@@ -111,11 +138,13 @@ def run_model(
 
     # Get the data back
     samples = list()
-    for drnl in drnls.itervalues():
+    for drnl in drnls:#drnls.itervalues():
         samples.append(drnl.read_samples(g.buffer_manager()))
     samples = numpy.hstack(samples)
 
     # Close the machine
     g.stop()
+
+    print "channels running: ",len(drnls)
 
     return samples

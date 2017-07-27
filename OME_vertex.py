@@ -161,7 +161,7 @@ class OMEVertex(
         spec.write_value(
             placement.p, data_type=self._COREID_TYPE)
 
-        print "OME placement=",placement.p
+     #   print "OME placement=",placement.p
 
         # Write number of drnls
         spec.write_value(

@@ -32,6 +32,8 @@ uint coreID;
 uint chipID;
 uint test_DMA;
 uint seg_index;
+uint cbuff_index;
+uint cbuff_numseg;
 uint read_switch;
 uint write_switch;
 uint processing;
@@ -103,8 +105,10 @@ void app_init(void)
 {
 
 	seg_index=0;
+	cbuff_index=0;
 	read_switch=0;
 	write_switch=0;
+	cbuff_numseg=3;
 	
 	/* say hello */
 	
@@ -143,13 +147,17 @@ void app_init(void)
     dt=(1.0/Fs);
 
     //real-time timer period calculation (us)
-    TIMER_TICK_PERIOD = (uint)(1e6 * ((REAL)SEGSIZE/Fs));
+    //TIMER_TICK_PERIOD = (uint)(1e6 * ((REAL)SEGSIZE/Fs));
+    TIMER_TICK_PERIOD = 30000;
     log_info("timer period=%d",(uint)TIMER_TICK_PERIOD);
     log_info("Fs=%d",sampling_frequency);
 
 
 	// Allocate buffers somewhere in SDRAM
-	
+
+    //hack for smaller SDRAM intermediate buffers
+
+	//data_size=cbuff_numseg*SEGSIZE;
 	//output results buffer
 	sdramout_buffer = (REAL *) sark_xalloc (sv->sdram_heap,
 					 data_size * sizeof(REAL),
@@ -336,6 +344,9 @@ void data_write(uint null_a, uint null_b)
 		spin1_dma_transfer(DMA_WRITE,&sdramout_buffer[out_index],dtcm_buffer_out,DMA_WRITE,
 		  						SEGSIZE*sizeof(REAL));
 #ifdef PRINT
+        log_info("[core %d] segment %d written to @ 0x%08x\n", coreID,seg_index,
+              (uint) &sdramout_buffer[out_index]);
+
 		io_printf (IO_BUF, "[core %d] segment %d written to @ 0x%08x - 0x%08x\n", coreID,seg_index,
 							  (uint) &sdramout_buffer[out_index],(uint) &sdramout_buffer[out_index+(NUMFIBRES-1)*SEGSIZE+SEGSIZE-1]);
 #endif
@@ -416,6 +427,7 @@ void data_read(uint ticks, uint null)
 uint process_chan(REAL *out_buffer,REAL *in_buffer) 
 {  
 	uint segment_offset=SEGSIZE*(seg_index-1);
+	//uint segment_offset=SEGSIZE*(cbuff_index-1);
 	uint i,j,k;
 		
 	uint si=0;
@@ -498,7 +510,15 @@ void transfer_handler(uint tid, uint ttag)
 #endif
 		//increment segment index
 		seg_index++;
-		
+		//check circular buffer
+		if(cbuff_index<cbuff_numseg)
+		{    //increment circular buffer index
+		    cbuff_index++;
+		}
+		else
+		{
+		    cbuff_index=1;
+		}
 		#ifdef PROFILE
 		  start_count_process = tc[T2_COUNT];
 		#endif

@@ -217,9 +217,9 @@ class DRNLVertex(
         # Write the sampling frequency
         spec.write_value(self._fs,data_type=DataType.UINT32)
 
-        print "DRNL OME placement=",OME_placement
+    #    print "DRNL OME placement=",OME_placement
 
-        print "DRNL placement=",placement.p
+   #     print "DRNL placement=",placement.p
 
         # End the specification
         spec.end_specification()

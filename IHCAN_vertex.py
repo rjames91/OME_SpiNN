@@ -168,9 +168,9 @@ class IHCANVertex(
             [self._recording_size], ip_tags=ip_tags))
 
 
-        print "IHCAN DRNL placement=",DRNL_placement
+#        print "IHCAN DRNL placement=",DRNL_placement
 
-        print "IHCAN placement=",placement.p
+        #print "IHCAN placement=",placement.p
 
         # End the specification
         spec.end_specification()
