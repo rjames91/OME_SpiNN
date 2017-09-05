@@ -22,7 +22,7 @@
 
 
 //#define TOTAL_TICKS 62//240//173//197
-#define PROFILE
+//#define PROFILE
 //#define LOOP_PROFILE
 //#define PRINT
 
@@ -42,6 +42,8 @@ uint index_y;
 uint TOTAL_TICKS;
 uint TIMER_TICK_PERIOD;
 uint final_ack;
+
+uint_float_union MC_union;
 
 REAL conchaL,conchaH,conchaG,earCanalL,earCanalH,earCanalG,stapesH,stapesL,stapesScalar,
 	ARtau,ARdelay,ARrateThreshold,rateToAttenuationFactor,BFlength;
@@ -83,9 +85,11 @@ enum params {
     DATA_SIZE = 0,
     COREID,
     NUM_DRNL,
+    NUM_MACK,
     FS,
     NUM_BFS,
     KEY,
+    R2S_KEY,
     DATA
     };
 
@@ -100,7 +104,11 @@ uint placement_coreID;
 
 uint key;
 
+uint r2s_key;
+
 uint num_drnls;
+
+uint num_macks;
 
 uint sampling_frequency;
 
@@ -141,9 +149,15 @@ void app_init(void)
     key = params[KEY];
     io_printf (IO_BUF, "OME-->DRNL key=%d\n",key);
 
+    r2s_key=params[R2S_KEY];
+
     //Get number of child DRNL vertices
     num_drnls=params[NUM_DRNL];
     io_printf (IO_BUF, "num drnls=%d\n",num_drnls);
+
+    //get number of macks
+    num_macks=params[NUM_MACK];
+    io_printf (IO_BUF, "num macks=%d\n",num_macks);
 
     //Get sampling frequency
     sampling_frequency = params[FS];
@@ -153,45 +167,25 @@ void app_init(void)
 
     //real-time timer period calculation (us)
     TIMER_TICK_PERIOD = (uint)(0.95*1e6 * ((REAL)SEGSIZE/Fs));
-    //TIMER_TICK_PERIOD = 4000;
+    //TIMER_TICK_PERIOD = 30000;
     log_info("timer period=%d",(uint)TIMER_TICK_PERIOD);
     log_info("Fs=%d",sampling_frequency);
     final_ack=0;
 
-
 	// Allocate buffers somewhere in SDRAM
 
     //hack for smaller SDRAM intermediate buffers
-	data_size=cbuff_numseg*SEGSIZE;
+	//data_size=cbuff_numseg*SEGSIZE;
 
-	//output results buffer
-	sdramout_buffer = (REAL *) sark_xalloc (sv->sdram_heap,
-					 data_size * sizeof(REAL),
-					 placement_coreID,
-					 ALLOC_LOCK);
-
-	/*sdramin_buffer = (REAL *) sark_xalloc (sv->sdram_heap,
-					MAX_SIGNAL_S*(uint)44100. *sizeof(REAL),
-					coreID|32,
-					ALLOC_LOCK);*/
-	
-	/*profile_buffer = (REAL *) sark_xalloc (sv->sdram_heap,
-					3 * ((uint)44100./SEGSIZE) *sizeof(REAL),
-					placement_coreID|64,
-					ALLOC_LOCK);
-	*/
-	// and a buffer in DTCM
-	
 	dtcm_buffer_a = (REAL *) sark_alloc (SEGSIZE, sizeof(REAL));
 	dtcm_buffer_b = (REAL *) sark_alloc (SEGSIZE, sizeof(REAL));
-	dtcm_buffer_x = (REAL *) sark_alloc (SEGSIZE, sizeof(REAL));
+/*	dtcm_buffer_x = (REAL *) sark_alloc (SEGSIZE, sizeof(REAL));
 	dtcm_buffer_y = (REAL *) sark_alloc (SEGSIZE, sizeof(REAL));
-	dtcm_profile_buffer = (REAL *) sark_alloc (3*TOTAL_TICKS, sizeof(REAL));
+	dtcm_profile_buffer = (REAL *) sark_alloc (3*TOTAL_TICKS, sizeof(REAL));*/
 	
-	if (dtcm_buffer_a == NULL ||dtcm_buffer_b == NULL ||dtcm_buffer_x == NULL ||dtcm_buffer_y == NULL 
-			||  sdramout_buffer == NULL || sdramin_buffer == NULL || dtcm_profile_buffer == NULL)
-	/*if (sdramout_buffer == NULL || sdramin_buffer == NULL || dtcm_buffer_y == NULL 
-			|| dtcm_buffer_a == NULL || dtcm_buffer_b == NULL || dtcm_profile_buffer == NULL ||dtcm_buffer_x == NULL)*/
+	//if (dtcm_buffer_a == NULL ||dtcm_buffer_b == NULL ||dtcm_buffer_x == NULL ||dtcm_buffer_y == NULL
+	//		|| sdramin_buffer == NULL || dtcm_profile_buffer == NULL)
+	if(dtcm_buffer_a == NULL ||dtcm_buffer_b == NULL ||sdramin_buffer == NULL)
 	{
 		test_DMA = FALSE;
 		io_printf (IO_BUF, "[core %d] error - cannot allocate buffer\n", coreID);
@@ -205,15 +199,10 @@ void app_init(void)
 			dtcm_buffer_a[i]   = 0;
 			dtcm_buffer_b[i]   = 0;
 		}
-		for (uint i = 0; i < SEGSIZE; i++)
+	/*	for (uint i = 0; i < SEGSIZE; i++)
 		{
 			dtcm_buffer_x[i]   = 0;
 			dtcm_buffer_y[i]   = 0;
-		}
-	
-		for (uint i=0;i<data_size;i++)
-		{
-			sdramout_buffer[i]  = 0;
 		}
 
 		
@@ -221,23 +210,18 @@ void app_init(void)
 		{
 			dtcm_profile_buffer[i]  = 0;
 			//profile_buffer[i]  = 0;
-		}
+		}*/
 
         io_printf (IO_BUF, "[core %d] data spec output buffer tag= %d\n", coreID,
            (uint) placement_coreID);
 		
-		io_printf (IO_BUF, "[core %d] dtcm buffer a @ 0x%08x\n", coreID,
+	/*	io_printf (IO_BUF, "[core %d] dtcm buffer a @ 0x%08x\n", coreID,
 				   (uint) dtcm_buffer_a);
-		io_printf (IO_BUF, "[core %d] sdram out buffer @ 0x%08x\n", coreID,
-				   (uint) sdramout_buffer);
-		io_printf (IO_BUF, "[core %d] sdram in buffer @ 0x%08x\n", coreID,
-				   (uint) sdramin_buffer);	
-	/*	io_printf (IO_BUF, "[core %d] profile buffer @ 0x%08x\n", coreID,
+		io_printf (IO_BUF, "[core %d] profile buffer @ 0x%08x\n", coreID,
 				   (uint) profile_buffer);	*/
 	}
 	
 	//============MODEL INITIALISATION================//
-	//BFlength=1.0;//TODO change this to input parameter
     BFlength = params[NUM_BFS];
 	conchaL=1500.0;
 	conchaH=3000.0;
@@ -370,14 +354,13 @@ void app_end(uint null_a,uint null_b)
     else
     {
         log_info("All data has been sent seg_index=%d",seg_index);
-        while (!spin1_send_mc_packet(key, 1, WITH_PAYLOAD)) {
+        while (!spin1_send_mc_packet(r2s_key, 0, NO_PAYLOAD)) {
             spin1_delay_us(1);
         }
         final_ack=1;
     }
 
 }
-
 //DMA read
 void data_read(uint null_a, uint null_b)
 {
@@ -385,16 +368,18 @@ void data_read(uint null_a, uint null_b)
   start_count_read = tc[T2_COUNT];
 #endif
 	REAL *dtcm_buffer_in;
-	if(test_DMA == TRUE && sync_count<num_drnls && seg_index==0)
+	if(test_DMA == TRUE && sync_count<num_macks && seg_index==0)
 	{
+	    //log_info("sending r2s");
         //send ready to send MC packet
-	    while (!spin1_send_mc_packet(key, 3, WITH_PAYLOAD)) {
+	    while (!spin1_send_mc_packet(r2s_key, 0, NO_PAYLOAD)) {
             spin1_delay_us(1);
         }
+       // spin1_delay_us(1000);//to prevent unnecessarily frequent TX of r2s
 
 	}
 	//read from DMA and copy into DTCM
-	else if(read_ticks<TOTAL_TICKS && test_DMA == TRUE && sync_count==num_drnls)
+	else if(read_ticks<TOTAL_TICKS && test_DMA == TRUE && sync_count==num_macks)
 	{
 	    if(seg_index==0)start_count_full = tc[T2_COUNT];
 
@@ -405,36 +390,24 @@ void data_read(uint null_a, uint null_b)
 		{
 			dtcm_buffer_in=dtcm_buffer_a;
 			read_switch=1;
-            #ifdef PRINT
-                        io_printf (IO_BUF, "buff_a read\n");
-            #endif
 		}
 		else
 		{
 			dtcm_buffer_in=dtcm_buffer_b;
 			read_switch=0;
-            #ifdef PRINT
-                        io_printf (IO_BUF, "buff_b read\n");
-            #endif
 		}
 
-        #ifdef PRINT
-                io_printf (IO_BUF, "[core %d] sdram DMA read @ 0x%08x (segment %d)\n", coreID,
-                              (uint) &sdramin_buffer[(seg_index)*SEGSIZE],seg_index+1);
-        #endif
-		
 		spin1_dma_transfer(DMA_READ,&sdramin_buffer[seg_index*SEGSIZE], dtcm_buffer_in, DMA_READ,
 			   SEGSIZE*sizeof(REAL));
 	}
 	// stop if desired number of ticks reached
-	else if (read_ticks >= TOTAL_TICKS && sync_count==num_drnls)
+	else if (read_ticks >= TOTAL_TICKS && sync_count==num_macks)
 	{
 	    if(final_ack==1)//2nd time in this call therefore
 	                    //child models have replied with finished processing acks
 	    {
             end_count_full = tc[T2_COUNT];
             log_info("[Chip%d] total processing time=%d ticks",chipID,start_count_full-end_count_full);
-
             spin1_schedule_callback(app_end,NULL,NULL,2);
 	    }
 	    else
@@ -443,7 +416,6 @@ void data_read(uint null_a, uint null_b)
 	        //send finished processing MC packet
             spin1_schedule_callback(app_end,NULL,NULL,2);
 	    }
-
 
  /*       log_info("All data has been sent and confirmed seg_index=%d",seg_index);
         while (!spin1_send_mc_packet(key, 1, WITH_PAYLOAD)) {
@@ -454,11 +426,8 @@ void data_read(uint null_a, uint null_b)
 	}
 }
 
-
-uint process_chan(REAL *out_buffer,REAL *in_buffer) 
-{  
-	//uint segment_offset=SEGSIZE*(seg_index-1);
-	uint segment_offset=SEGSIZE*(cbuff_index-1);
+void process_chan(REAL *in_buffer)
+{
 	uint i,j,k;
 		
 	uint si=0;
@@ -518,14 +487,19 @@ uint process_chan(REAL *out_buffer,REAL *in_buffer)
 		//stapes displacement
 		stapesDisplacement= stapesLP_b * stapesVelocity - stapesLP_a[1] * past_stapesDisp;
 		//update vars
-		past_stapesDisp=stapesDisplacement;	
-	
+		past_stapesDisp=stapesDisplacement;
+
+		MC_union.f = stapesDisplacement;
+
+       // log_info("payload = %d",MC_union.u);
 		//save to buffer
-		out_buffer[i]=stapesDisplacement;
+		//out_buffer[i]=stapesDisplacement;
 		//out_buffer[i]=stapesVelocity;//nlin_b0;//nonlinout1a;//nonlinout2b;//linout1;//nonlinout1a;
+        while (!spin1_send_mc_packet(key,MC_union.u, WITH_PAYLOAD)) {
+            spin1_delay_us(1);
+        }
 	}
-		
-	return segment_offset;
+    log_info("processing complete %d",seg_index);
 }
 
 void transfer_handler(uint tid, uint ttag)
@@ -535,102 +509,48 @@ void transfer_handler(uint tid, uint ttag)
 #ifdef PROFILE
   end_count_read = tc[T2_COUNT];
   dtcm_profile_buffer[seg_index*3]=(REAL)(start_count_read-end_count_read);
-#ifdef PRINT
-  io_printf (IO_BUF, "read complete in %d ticks\n",start_count_read-end_count_read);
 #endif
-#endif
+  //io_printf (IO_BUF, "read complete in %d ticks\n",start_count_read-end_count_read);
+
 		//increment segment index
 		seg_index++;
 		//check circular buffer
-		if(cbuff_index<cbuff_numseg)
+/*		if(cbuff_index<cbuff_numseg)
 		{    //increment circular buffer index
 		    cbuff_index++;
 		}
 		else
 		{
 		    cbuff_index=1;
-		}
+		}*/
 		#ifdef PROFILE
 		  start_count_process = tc[T2_COUNT];
 		#endif
 		
 		//choose current buffers
-		if(!read_switch && !write_switch)
+		if(!read_switch)
 		{
-            #ifdef PRINT
-            io_printf (IO_BUF, "buff_b-->buff_x\n");
-            #endif
-			index_x=process_chan(dtcm_buffer_x,dtcm_buffer_b);
-		}
-		else if(!read_switch && write_switch)
-		{
-            #ifdef PRINT
-            io_printf (IO_BUF, "buff_b-->buff_y\n");
-            #endif
-			index_y=process_chan(dtcm_buffer_y,dtcm_buffer_b);
-		}
-		else if(read_switch && !write_switch)
-		{
-            #ifdef PRINT
-            io_printf (IO_BUF, "buff_a-->buff_x\n");
-            #endif
-			index_x=process_chan(dtcm_buffer_x,dtcm_buffer_a);
-
+			process_chan(dtcm_buffer_b);
 		}
 		else
 		{
-            #ifdef PRINT
-            io_printf (IO_BUF, "buff_a-->buff_y\n");
-            #endif
-			index_y=process_chan(dtcm_buffer_y,dtcm_buffer_a);
+			process_chan(dtcm_buffer_a);
 		}		  
-			
-		#ifdef PROFILE
-			  end_count_process = tc[T2_COUNT];
-			  dtcm_profile_buffer[1+((seg_index-1)*3)]=start_count_process-end_count_process;
-		#ifdef PRINT 
-			io_printf (IO_BUF, "process complete in %d ticks (segment %d)\n",start_count_process-end_count_process,seg_index);
-		#endif	
-		#endif			
 
-		spin1_trigger_user_event(NULL,NULL);
-	}
-	else if (ttag==DMA_WRITE)
-	{
-        #ifdef PROFILE
-          end_count_write = tc[T2_COUNT];
-          dtcm_profile_buffer[2+((seg_index-1)*3)]=start_count_write-end_count_write;
-        #ifdef PRINT
-          io_printf (IO_BUF, "write complete in %d ticks\n",start_count_write-end_count_write);
-        #endif
-        #endif
-		//flip write buffers
-		write_switch=!write_switch;
 
-		//sync_count=0;
-		//send MC packet to connected DRNL models
-        while (!spin1_send_mc_packet(key, 0, WITH_PAYLOAD))
-        {
-            spin1_delay_us(1);
-        }
+	//	spin1_trigger_user_event(NULL,NULL);
 	}
 	else
 	{
-		#ifdef PRINT
 		io_printf(IO_BUF,"[core %d] invalid %d DMA tag!\n",coreID,ttag);
-		#endif
 	}
 
 }
 
-void sync_check(uint key, uint payload)
+void sync_check(uint mc_key, uint null)
 {
-
-    if(payload==2)
-    {
-        sync_count++;
-        log_info("ack mcpacket recieved sync_count=%d seg_index=%d\n",sync_count,seg_index);
-    }
+    sync_count++;
+    log_info("ack mcpacket recieved from key=%d sync_count=%d seg_index=%d\n",mc_key,sync_count,seg_index);
 }
 
 void app_done ()
@@ -666,15 +586,13 @@ void c_main()
 
   //setup callbacks
   //process channel once data input has been read to DTCM
-  spin1_callback_on (DMA_TRANSFER_DONE,transfer_handler,0);
+  spin1_callback_on (DMA_TRANSFER_DONE,transfer_handler,1);
   //reads from DMA to DTCM every tick
-  spin1_callback_on (TIMER_TICK,data_read,-1);
-  spin1_callback_on (USER_EVENT,data_write,0);
-  spin1_callback_on (MCPL_PACKET_RECEIVED,sync_check,1);
+  spin1_callback_on (TIMER_TICK,data_read,0);
+ // spin1_callback_on (USER_EVENT,data_write,1);
+  spin1_callback_on (MC_PACKET_RECEIVED,sync_check,-1);
 
-
-
-  spin1_start (SYNC_WAIT);
+  spin1_start (SYNC_WAIT);//(SYNC_NOWAIT);//
   
   app_done ();
 

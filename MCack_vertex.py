@@ -22,15 +22,17 @@ from spinn_front_end_common.interface.buffer_management \
 from spinn_front_end_common.utilities.utility_objs.executable_start_type \
     import ExecutableStartType
 
+from enum import Enum
+import numpy
+
 from spinn_front_end_common.abstract_models\
     .abstract_provides_n_keys_for_partition \
     import AbstractProvidesNKeysForPartition
 
-from enum import Enum
-import numpy
+from spinn_machine.utilities.progress_bar import ProgressBar
 
 
-class IHCANVertex(
+class MCackVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
         AbstractProvidesNKeysForPartition
@@ -38,7 +40,7 @@ class IHCANVertex(
     """ A vertex that runs the DRNL algorithm
     """
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 7*4
+    _N_PARAMETER_BYTES = 3*4
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
@@ -50,30 +52,56 @@ class IHCANVertex(
     # the data type of the coreID
     _COREID_TYPE = DataType.UINT32
 
-    def __init__(self, drnl,resample_factor):#TODO:add Fs to params
+    def __init__(self, parent,command_partition_name="MCackData",
+            acknowledge_partition_name="MCackDataAck"):
         """
 
         :param ome: The connected ome vertex
         """
-
-        MachineVertex.__init__(self, label="IHCAN Node", constraints=None)
         AbstractProvidesNKeysForPartition.__init__(self)
-        self._drnl = drnl
-        self._drnl.register_processor(self)
-        self._resample_factor=resample_factor
-        self._fs=drnl.fs
-        self._num_data_points = 2 * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
-        self._recording_size = (self._num_data_points/self._resample_factor) * 4#numpy.ceil(self._num_data_points/32.0)#
+        MachineVertex.__init__(self, label="MCack Node", constraints=None)
+        self._parent = parent
+        self._parent.register_mack_processor(self)
+        self._fs=parent.fs
 
-
+        self._child_vertices = list()
+        self._child_placements = list()
+        self._num_data_points = parent.n_data_points
         self._data_size = (
             self._num_data_points * self._DATA_ELEMENT_TYPE.size +
             self._DATA_COUNT_TYPE.size
         )
-
         self._sdram_usage = (
-            self._N_PARAMETER_BYTES + self._data_size
+            self._N_PARAMETER_BYTES
         )
+        self._command_partition_name = command_partition_name
+        self._acknowledge_partition_name = acknowledge_partition_name
+
+    def register_mack_processor(self, child_vertex):
+        self._child_vertices.append(child_vertex)
+
+
+    def get_acknowledge_key(self, placement, routing_info):
+        key = routing_info.get_first_key_from_pre_vertex(
+            placement.vertex, self._acknowledge_partition_name)
+        return key
+
+    @property
+    def n_data_points(self):
+        return self._num_data_points
+
+    @property
+    def fs(self):
+        return self._fs
+
+    @property
+    def command_partition_name(self):
+        return self._command_partition_name
+
+    @property
+    def acknowledge_partition_name(self):
+        return self._acknowledge_partition_name
+
 
     def _get_model_parameters_array(self):
         parameters = self._model.get_parameters()
@@ -98,8 +126,8 @@ class IHCANVertex(
     @property
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
-        sdram = self._N_PARAMETER_BYTES + self._data_size
-        sdram += 1 * self._KEY_ELEMENT_TYPE.size
+        sdram = self._N_PARAMETER_BYTES #+ self._data_size
+#        sdram += len(self._ihcan_vertices) * self._KEY_ELEMENT_TYPE.size
 
         resources = ResourceContainer(
             dtcm=DTCMResource(0),
@@ -110,7 +138,7 @@ class IHCANVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
-        return "IHC_AN_float_MAP.aplx"
+        return "MCACK.aplx"
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
@@ -118,106 +146,56 @@ class IHCANVertex(
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
-        return 2  # 2 for control IDs
+        return 2  # two for control IDs
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
         "tags": "MemoryTags",
         "placements": "MemoryPlacements"
     })
+
     @overrides(
         AbstractGeneratesDataSpecification.generate_data_specification,
         additional_arguments=["routing_info", "tags", "placements"])
     def generate_data_specification(
             self, spec, placement, routing_info, tags, placements):
 
-        DRNL_placement=placements.get_placement_of_vertex(self._drnl).p
-
         # Reserve and write the parameters region
         region_size = self._N_PARAMETER_BYTES
-        region_size += 1 * self._KEY_ELEMENT_TYPE.size
+#        region_size += (1 + len(self._ihcan_vertices)) * self._KEY_ELEMENT_TYPE.size
         spec.reserve_memory_region(0, region_size)
         spec.switch_write_focus(0)
 
-        # Write the data size in words
-        spec.write_value(
-            self._num_data_points * (float(self._DATA_ELEMENT_TYPE.size) / 4.0),
-            data_type=self._DATA_COUNT_TYPE)
+        # Get the placement of the vertices and find out how many chips
+        # are needed
+        keys = list()
+        for vertex in self._child_vertices:
+            child_placement = placements.get_placement_of_vertex(vertex)
+            self._child_placements.append(child_placement)
+            key = routing_info.get_first_key_from_pre_vertex(
+                vertex, self._acknowledge_partition_name)
+            keys.append(key)
+        keys.sort()
 
-        # Write the DRNLCoreID
-        spec.write_value(
-            DRNL_placement, data_type=self._COREID_TYPE)
-
-        # Write the CoreID
-        spec.write_value(
-            placement.p, data_type=self._COREID_TYPE)
-
-        #Write the DRNLAppID
-        spec.write_value(
-            0, data_type=self._COREID_TYPE)
-
-        # Write the Acknowledge key
-        spec.write_value(self._drnl.get_acknowledge_key(
+        # Write the Parent key
+        spec.write_value(self._parent.get_acknowledge_key(
             placement, routing_info))
-       # print self._drnl.get_acknowledge_key(
-       #     placement, routing_info)
 
-        #Write the spike resample factor
+        # Write the child key
+        if len(keys)>0:
+            spec.write_value(routing_info.get_routing_info_from_pre_vertex(
+                self, self._command_partition_name).first_key, data_type=DataType.UINT32)
+            #print "DRNL routing key:{}\n".format(routing_info.first_key)
+        else:
+            spec.write_value(0, data_type=DataType.UINT32)
+
+        # Write number of child nodes
         spec.write_value(
-            self._resample_factor, data_type=self._COREID_TYPE)
-
-        #Write the sampling frequency
-        spec.write_value(
-            self._fs, data_type=self._COREID_TYPE)
-
-        # Reserve and write the recording regions
-        spec.reserve_memory_region(
-            1,
-            recording_utilities.get_recording_header_size(1))
-        spec.switch_write_focus(1)
-        ip_tags = tags.get_ip_tags_for_vertex(self) or []
-        spec.write_array(recording_utilities.get_recording_header_array(
-            [self._recording_size], ip_tags=ip_tags))
-
-
-#        print "IHCAN DRNL placement=",DRNL_placement
-
-        #print "IHCAN placement=",placement.p
+            len(self._child_vertices), data_type=self._COREID_TYPE)
 
         # End the specification
         spec.end_specification()
 
-    def read_samples(self, buffer_manager, placement):
-        """ Read back the spikes """
-
-        # Read the data recorded
-        data_values, _ = buffer_manager.get_data_for_vertex(placement, 0)
-        data = data_values.read_all()
-
-        numpy_format=list()
-
-        numpy_format.append(("AN",numpy.float32))
-
-        formatted_data = numpy.array(data, dtype=numpy.uint8).view(numpy_format)
-
-        #check all expected data has been recorded
-        if len(formatted_data) != self._num_data_points/self._resample_factor:
-            #if not set output to zeros of correct length, this will cause an error flag in run_ear.py
-            formatted_data = numpy.zeros(self._num_data_points)
-
-        # Convert the data into an array of state variables
-        return formatted_data
-
-    def get_minimum_buffer_sdram_usage(self):
-        return 1024
-
-    def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
-        return recording_utilities.get_n_timesteps_in_buffer_space(
-            buffer_space, 4)
-
-    def get_recorded_region_ids(self):
-        return [0]
-
-    def get_recording_region_base_address(self, txrx, placement):
-        return helpful_functions.locate_memory_region_for_placement(
-            placement, 1, txrx)
+  #  @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
+  #  def get_n_keys_for_partition(self, partition, graph_mapper):
+  #      return len(self._ihcan_vertices)

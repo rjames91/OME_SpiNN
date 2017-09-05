@@ -36,5 +36,11 @@
 #define ABS(x) (((x)<0) ? -(x) : (x))
 #define SIGN(x) (((x)<0) ? -(1.0f) : (1.0f))
 
+typedef union
+{
+	uint32_t u;
+	float f;
+} uint_float_union;
+
 
 #endif /* IHC_AN_H_ */

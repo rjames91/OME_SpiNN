@@ -41,7 +41,7 @@ class OMEVertex(
     """
 
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 5*4
+    _N_PARAMETER_BYTES = 6*4
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
@@ -53,8 +53,8 @@ class OMEVertex(
     # the data type of the coreID
     _COREID_TYPE = DataType.UINT32
 
-    def __init__(self, data,fs,data_partition_name="OMEData",
-            acknowledge_partition_name="OMEDataAck"):#TODO:add Fs to params
+    def __init__(self, data,fs,num_bfs,data_partition_name="OMEData",
+            acknowledge_partition_name="OMEDataAck",command_partition_name="OMECommand"):#TODO:add Fs to params
         """
 
         :param coordinator: The coordinator vertex
@@ -62,14 +62,18 @@ class OMEVertex(
         """
 
         MachineVertex.__init__(self, label="OME Node", constraints=None)
+        AbstractProvidesNKeysForPartition.__init__(self)
         self._data = data
         self._data_partition_name = data_partition_name
         self._acknowledge_partition_name = acknowledge_partition_name
+        self._command_partition_name = command_partition_name
         self._fs=fs
+        self._num_bfs = num_bfs
 
         self._drnl_vertices = list()
         self._drnl_placements = list()
         self._data_receiver = dict()
+        self._mack_vertices = list()
 
         self._data_size = (
             (len(self._data) * self._DATA_ELEMENT_TYPE.size) +
@@ -87,13 +91,26 @@ class OMEVertex(
     def acknowledge_partition_name(self):
         return self._acknowledge_partition_name
 
+    @property
+    def command_partition_name(self):
+        return self._command_partition_name
+
     def register_processor(self, drnl_vertex):
         self._drnl_vertices.append(drnl_vertex)
+
+    def register_mack_processor(self, mack_vertex):
+        self._mack_vertices.append(mack_vertex)
+
 
     def get_acknowledge_key(self, placement, routing_info):
         key = routing_info.get_first_key_from_pre_vertex(
             placement.vertex, self._acknowledge_partition_name)
         return key
+
+    def get_mask(self, placement, routing_info):
+        mask = routing_info.get_routing_info_from_pre_vertex(
+            self, self._data_partition_name).first_mask
+        return ~mask & 0xFFFFFFFF
 
     @property
     def n_data_points(self):
@@ -101,6 +118,10 @@ class OMEVertex(
     @property
     def fs(self):
         return self._fs
+
+    @property
+    def get_num_bfs(self):
+        return self._num_bfs
 
     @property
     @overrides(MachineVertex.resources_required)
@@ -122,6 +143,10 @@ class OMEVertex(
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
         return ExecutableStartType.SYNC
+
+    @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
+    def get_n_keys_for_partition(self, partition, graph_mapper):
+        return 2  # 2 for control IDs
 
 
     @inject_items({
@@ -166,19 +191,29 @@ class OMEVertex(
         # Write number of drnls
         spec.write_value(
             len(self._drnl_vertices), data_type=self._COREID_TYPE)
-            #2, data_type = self._COREID_TYPE)
+
+        # Write number of macks
+        spec.write_value(
+            len(self._mack_vertices), data_type = self._COREID_TYPE)
 
         # Write the sampling frequency
         spec.write_value(
             self._fs, data_type=DataType.UINT32)
 
+        spec.write_value(
+            self._num_bfs, data_type=DataType.UINT32)
+
         # Write the key
         if len(keys)>0:
-            routing_info = routing_info.get_routing_info_from_pre_vertex(
-                self, self._data_partition_name)
-            spec.write_value(routing_info.first_key, data_type=DataType.UINT32)
+            spec.write_value(routing_info.get_routing_info_from_pre_vertex(
+                self, self._data_partition_name).first_key, data_type=DataType.UINT32)
         else:
             spec.write_value(0, data_type=DataType.UINT32)
+
+        # write the command key
+        spec.write_value(routing_info.get_routing_info_from_pre_vertex(
+            self,self._command_partition_name).first_key, data_type=DataType.UINT32)
+
 
         # Write the data - Arrays must be 32-bit values, so convert
         data = numpy.array(self._data, dtype=self._NUMPY_DATA_ELEMENT_TYPE)

@@ -34,13 +34,13 @@ from spinn_machine.utilities.progress_bar import ProgressBar
 
 class DRNLVertex(
         MachineVertex, AbstractHasAssociatedBinary,
-        AbstractGeneratesDataSpecification#,
-       # AbstractProvidesNKeysForPartition
+        AbstractGeneratesDataSpecification,
+        AbstractProvidesNKeysForPartition
         ):
     """ A vertex that runs the DRNL algorithm
     """
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 9*4
+    _N_PARAMETER_BYTES = 10*4
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
@@ -52,21 +52,24 @@ class DRNLVertex(
     # the data type of the coreID
     _COREID_TYPE = DataType.UINT32
 
-    def __init__(self, ome,CF,data_partition_name="DRNLData",
-            acknowledge_partition_name="DRNLDataAck"):#TODO:add Fs to params
+    def __init__(self, ome,CF,delay,data_partition_name="DRNLData",
+            acknowledge_partition_name="DRNLDataAck"):
         """
 
         :param ome: The connected ome vertex
         """
-
+        AbstractProvidesNKeysForPartition.__init__(self)
         MachineVertex.__init__(self, label="DRNL Node", constraints=None)
         self._ome = ome
         self._ome.register_processor(self)
         self._CF=CF
         self._fs=ome.fs
+        self._delay=int(delay)
+        self._mack=ome
 
         self._ihcan_vertices = list()
         self._ihcan_placements = list()
+        self._mask = list()
 
         self._num_data_points = ome.n_data_points
         self._data_size = (
@@ -84,6 +87,9 @@ class DRNLVertex(
     def register_processor(self, ihcan_vertex):
         self._ihcan_vertices.append(ihcan_vertex)
 
+    def register_ack_processor(self, mack):
+        mack.register_mack_processor(self)
+        self._mack=mack
 
     def get_acknowledge_key(self, placement, routing_info):
         key = routing_info.get_first_key_from_pre_vertex(
@@ -148,11 +154,16 @@ class DRNLVertex(
     def get_binary_start_type(self):
         return ExecutableStartType.SYNC
 
+    @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
+    def get_n_keys_for_partition(self, partition, graph_mapper):
+        return 2  # two for control IDs
+
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
         "tags": "MemoryTags",
         "placements": "MemoryPlacements"
     })
+
     @overrides(
         AbstractGeneratesDataSpecification.generate_data_specification,
         additional_arguments=["routing_info", "tags", "placements"])
@@ -196,14 +207,16 @@ class DRNLVertex(
             0, data_type=self._COREID_TYPE)
 
         # Write the Acknowledge key
-        spec.write_value(self._ome.get_acknowledge_key(
+       # spec.write_value(self._ome.get_acknowledge_key(
+        #    placement, routing_info))
+        spec.write_value(self._mack.get_acknowledge_key(
             placement, routing_info))
 
         # Write the key
         if len(keys)>0:
-            routing_info = routing_info.get_routing_info_from_pre_vertex(
-                self, self._data_partition_name)
-            spec.write_value(routing_info.first_key, data_type=DataType.UINT32)
+            spec.write_value(routing_info.get_routing_info_from_pre_vertex(
+                self, self._data_partition_name).first_key, data_type=DataType.UINT32)
+            #print "DRNL routing key:{}\n".format(routing_info.first_key)
         else:
             spec.write_value(0, data_type=DataType.UINT32)
 
@@ -213,6 +226,9 @@ class DRNLVertex(
 
         # Write the centre frequency
         spec.write_value(self._CF,data_type=DataType.UINT32)
+
+        # Write the delay
+        spec.write_value(self._delay,data_type=DataType.UINT32)
 
         # Write the sampling frequency
         spec.write_value(self._fs,data_type=DataType.UINT32)
