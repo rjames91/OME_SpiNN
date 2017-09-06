@@ -6,18 +6,18 @@ import pylab as plt
 from vision.spike_tools.vis.vis_tools import plot_output_spikes
 
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_4k",dtype='float32')
-audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_22k",dtype='float32')
+#audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_22k",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_chirp",dtype='float32')
-#audio_data=numpy.fromfile("./c_models/load_files/load1_1kate_22k",dtype='float32')
+audio_data=numpy.fromfile("./c_models/load_files/load1_1kate_22k",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1vowels_22k",dtype='float32')
 
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
-#pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs",dtype='float32')
+pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs",dtype='float32')
 #pole_freqs=numpy.empty(352)
 #pole_freqs.fill(6900.0)
 
-pole_freqs=numpy.empty(66)
-pole_freqs.fill(6900.0)
+#pole_freqs=numpy.empty(352)
+#pole_freqs.fill(6900.0)
 #pole_freqs=[500, 1000, 2000, 3000, 4000, 5000, 6000, 7000]
 #pole_freqs=[4000,4000]
 #plt.figure()
@@ -32,7 +32,8 @@ audio_data = audio_data[0:int(numpy.floor(len(audio_data)/100)*100)]
 
 #create framework of connected model vertices and run
 samples = model_launch_framework.run_model(
-    audio_data, n_chips=numpy.ceil(len(pole_freqs)/2) +1,n_drnl=2,pole_freqs=pole_freqs,n_ihcan=5,fs=22050,resample_factor=1)
+    audio_data, n_chips=numpy.ceil(len(pole_freqs)/2) +1,n_drnl=2,
+    pole_freqs=pole_freqs,n_ihcan=5,fs=22050,resample_factor=1,num_macks=4)
 
 
 #convert to spike train

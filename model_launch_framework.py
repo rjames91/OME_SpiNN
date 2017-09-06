@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_model(
-        data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,fs=44100,resample_factor=1):
+        data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,fs=44100,resample_factor=1,num_macks=4):
     """ Executes an MCMC model, returning the received samples
 
     :param data: The audio input data
@@ -118,7 +118,7 @@ def run_model(
     # here we define the MC ack tree
     parents = []
     parents.append(ome)
-    num_macks = 4
+   # num_macks = 4
     drnls_index=0
     # calculate number of mack tree rows above OME (final row is all DRNL instances)
     n_mack_tree_rows = int(numpy.ceil(math.log(len(pole_freqs),num_macks)))
@@ -131,10 +131,9 @@ def run_model(
             # clear macks list
             macks[:] = []
         parent_count=0
+        first=1
         target_drnls = len(drnls)
         for parent in parents:
-           # if len(drnls)<=num_macks:
-           #     n_macks=len(drnls)
             #reduced mack connections to account for remainder
             if k == (n_mack_tree_rows-1) and remainder_macks>0:
                 #calculate the distribution of the drnls among the
@@ -142,13 +141,14 @@ def run_model(
                 #find available macks
                 avail_macks=len(parents)-parent_count
 
-                if avail_macks <= target_drnls:
-                    n_macks = 1
+                if avail_macks <= target_drnls and first:
+                    n_macks = remainder_macks % n_macks
+                    first=0
                 elif avail_macks * n_macks > target_drnls and avail_macks>1:
                     n_macks = int((avail_macks*n_macks)/target_drnls)
                 else:
                     n_macks = int(target_drnls/avail_macks)
-
+                #clip n_macks
                 if n_macks > num_macks:
                     n_macks = num_macks
                 elif n_macks < 1:
@@ -156,6 +156,10 @@ def run_model(
                 #update count and drnls remaining
                 parent_count += 1
                 target_drnls-=n_macks
+
+            #MC Ack for very small simulations
+            elif len(drnls)<num_macks:
+                n_macks=len(drnls)
 
             else:
                 n_macks=num_macks
