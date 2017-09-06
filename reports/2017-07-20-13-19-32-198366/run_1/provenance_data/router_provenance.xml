@@ -1,7 +1,0 @@
-<provenance_data_items name="router_provenance">
-  <provenance_data_item name="total_sent_packets">0</provenance_data_item>
-  <provenance_data_item name="total_created_packets">0</provenance_data_item>
-  <provenance_data_item name="total_dropped_packets">0</provenance_data_item>
-  <provenance_data_item name="total_missed_dropped_packets">0</provenance_data_item>
-  <provenance_data_item name="total_lost_dropped_packets">0</provenance_data_item>
-</provenance_data_items>
