@@ -143,6 +143,7 @@ def run_model(
     samples = numpy.hstack(samples)
 
     # Close the machine
+
     g.stop()
 
     print "channels running: ",len(drnls)
