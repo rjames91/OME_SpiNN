@@ -21,6 +21,11 @@ import math
 
 logger = logging.getLogger(__name__)
 
+def calculate_additional_chips(num_rows,num_macks):
+    acc=0
+    for i in range(num_rows-1):
+        acc += num_macks**i
+    return numpy.ceil(acc/16)
 
 def run_model(
         data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,fs=44100,resample_factor=1,num_macks=4):
@@ -30,9 +35,15 @@ def run_model(
 
     :return: nothing (output checked from ybug dump)
       """
+    # calculate number of mack tree rows above OME (final row is all DRNL instances)
+    n_mack_tree_rows = int(numpy.ceil(math.log(len(pole_freqs),num_macks)))
+    #calculate remainder drnls, if non-zero once this many are generated all following mack-->drnl connections will be 1 to 1
+    remainder_macks =(num_macks**(n_mack_tree_rows)) - len(pole_freqs)
+
+    additional_chips = calculate_additional_chips(num_macks=num_macks, num_rows=n_mack_tree_rows)
 
     # Set up the simulation
-    g.setup(n_chips_required=n_chips, model_binary_module=model_binaries)
+    g.setup(n_chips_required=n_chips+additional_chips, model_binary_module=model_binaries)
 
     # Get the number of cores available for use
     machine = g.machine()
@@ -55,63 +66,64 @@ def run_model(
 
     cf_index=0
     count=0
+
+    #OME is on ethernet chip for live streaming
+    for chip in machine.ethernet_connected_chips:
+        # create OME
+        ome = OMEVertex(data, fs, len(pole_freqs))
+        g.add_machine_vertex_instance(ome)
+
+        # constrain placement to local chip
+        ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
+        # omes[chip.x, chip.y] = ome
+        omes.append(ome)
+        boards[chip.x, chip.y] = chip.ip_address
+        break
+
     for chip in machine.chips:
         if count >= n_chips:
             break
         else:
+            #create DRNLs
+            for i in range(n_drnl):
 
-            if count==0:
-                #create OME
-                ome=OMEVertex(data,fs,len(pole_freqs))
-
-                g.add_machine_vertex_instance(ome)
-
+                CF=pole_freqs[cf_index]
+                drnl=DRNLVertex(ome,CF,delays[cf_index])
+                g.add_machine_vertex_instance(drnl)
                 # constrain placement to local chip
-                ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-                #omes[chip.x, chip.y] = ome
-                omes.append(ome)
-                boards[chip.x, chip.y] = chip.ip_address
-            else:
-                #create DRNLs
-                for i in range(n_drnl):
+                drnl.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
+               #drnls[chip.x, chip.y,i] = drnl
+                drnls.append(drnl)
+                cf_index=cf_index+1
 
-                    CF=pole_freqs[cf_index]
-                    drnl=DRNLVertex(ome,CF,delays[cf_index])
-                    g.add_machine_vertex_instance(drnl)
+                for j in range(n_ihcan):
+                    ihcan=IHCANVertex(drnl,resample_factor)
+                    g.add_machine_vertex_instance(ihcan)
                     # constrain placement to local chip
-                    drnl.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-                   #drnls[chip.x, chip.y,i] = drnl
-                    drnls.append(drnl)
-                    cf_index=cf_index+1
-
-                    for j in range(n_ihcan):
-                        ihcan=IHCANVertex(drnl,resample_factor)
-                        g.add_machine_vertex_instance(ihcan)
-                        # constrain placement to local chip
-                        ihcan.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-                        #ihcans[chip.x, chip.y,j] = ihcan
-                        ihcans.append(ihcan)
-                        # Add an edge from the DRNL to the IHCAN, to send the data
-                        g.add_machine_edge_instance(
-                            MachineEdge(drnl, ihcan),
-                            drnl.data_partition_name)
-
-                        # Add an edge from the IHCAN to the DRNL,
-                        # to send acknowledgement
-                        g.add_machine_edge_instance(
-                            MachineEdge(ihcan, drnl),
-                            drnl.acknowledge_partition_name)
-
-                    # Add an edge from the OME to the DRNL, to send the data
+                    ihcan.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
+                    #ihcans[chip.x, chip.y,j] = ihcan
+                    ihcans.append(ihcan)
+                    # Add an edge from the DRNL to the IHCAN, to send the data
                     g.add_machine_edge_instance(
-                        MachineEdge(ome, drnl),
-                        ome.data_partition_name)
+                        MachineEdge(drnl, ihcan),
+                        drnl.data_partition_name)
 
-                    # Add an edge from the DRNL to the OME,
-                    # to send acknowledgement (remove when using command tree)
+                    # Add an edge from the IHCAN to the DRNL,
+                    # to send acknowledgement
                     g.add_machine_edge_instance(
-                        MachineEdge(drnl, ome),
-                        ome.acknowledge_partition_name)
+                        MachineEdge(ihcan, drnl),
+                        drnl.acknowledge_partition_name)
+
+                # Add an edge from the OME to the DRNL, to send the data
+                g.add_machine_edge_instance(
+                    MachineEdge(ome, drnl),
+                    ome.data_partition_name)
+
+                # Add an edge from the DRNL to the OME,
+                # to send acknowledgement (remove when using command tree)
+               # g.add_machine_edge_instance(
+               #     MachineEdge(drnl, ome),
+               #     ome.acknowledge_partition_name)
 
             count=count+1
 
@@ -120,10 +132,7 @@ def run_model(
     parents.append(ome)
    # num_macks = 4
     drnls_index=0
-    # calculate number of mack tree rows above OME (final row is all DRNL instances)
-    n_mack_tree_rows = int(numpy.ceil(math.log(len(pole_freqs),num_macks)))
-    #calculate remainder drnls, if non-zero once this many are generated all following mack-->drnl connections will be 1 to 1
-    remainder_macks =(num_macks**(n_mack_tree_rows)) - len(pole_freqs)
+    target_drnls = len(drnls)
 
     for k in range(n_mack_tree_rows):
         # generate row mack vertices
@@ -132,17 +141,16 @@ def run_model(
             macks[:] = []
         parent_count=0
         first=1
-        target_drnls = len(drnls)
         for parent in parents:
             #reduced mack connections to account for remainder
-            if k == (n_mack_tree_rows-1) and remainder_macks>0:
+            if k == (n_mack_tree_rows-1) and remainder_macks>0 and len(drnls)>num_macks:
                 #calculate the distribution of the drnls among the
                 # available macks (min of 1, max of 4 drnls per mack)
                 #find available macks
                 avail_macks=len(parents)-parent_count
 
                 if avail_macks <= target_drnls and first:
-                    n_macks = remainder_macks % n_macks
+                    n_macks = remainder_macks % num_macks
                     first=0
                 elif avail_macks * n_macks > target_drnls and avail_macks>1:
                     n_macks = int((avail_macks*n_macks)/target_drnls)
@@ -155,12 +163,11 @@ def run_model(
                     n_macks = 1
                 #update count and drnls remaining
                 parent_count += 1
-                target_drnls-=n_macks
+#                target_drnls-=n_macks
 
             #MC Ack for very small simulations
             elif len(drnls)<num_macks:
                 n_macks=len(drnls)
-
             else:
                 n_macks=num_macks
             for l in range(n_macks):
@@ -168,6 +175,7 @@ def run_model(
                 if k>= n_mack_tree_rows -1:
                     mack=drnls[drnls_index]
                     drnls_index += 1
+                    target_drnls -=1
                     #register this drnl instance to parent node list
                     mack.register_ack_processor(parent)
                 else:

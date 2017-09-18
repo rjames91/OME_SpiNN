@@ -167,7 +167,7 @@ void app_init(void)
 
     //real-time timer period calculation (us)
     TIMER_TICK_PERIOD = (uint)(0.95*1e6 * ((REAL)SEGSIZE/Fs));
-    //TIMER_TICK_PERIOD = 30000;
+  //  TIMER_TICK_PERIOD = 30000;
     log_info("timer period=%d",(uint)TIMER_TICK_PERIOD);
     log_info("Fs=%d",sampling_frequency);
     final_ack=0;
@@ -227,7 +227,7 @@ void app_init(void)
 	conchaH=3000.0;
 	conchaG=5.0;
 	earCanalL=3000.0;
-	earCanalH=3800;
+	earCanalH=3800.0;
 	earCanalG=5.0;
 	stapesH=700.0;
 	stapesL=10.0;
@@ -237,18 +237,19 @@ void app_init(void)
 	ARrateThreshold=100.0;
 	rateToAttenuationFactor=0.1/BFlength;
 
-	concha_q= PI * dt * (conchaH - conchaL);
+	concha_q= (REAL)PI * dt * (conchaH - conchaL);
 	concha_j= 1.0/(1.0+ (1.0/tan(concha_q)));
-	concha_k= (2.0 * cos(PI * dt * (conchaH + conchaL))) / ((1.0 + tan(concha_q)) * cos(concha_q));
+	concha_k= (2.0 * cos((REAL)PI * dt * (conchaH + conchaL)))
+	            / ((1.0 + tan(concha_q)) * cos(concha_q));
 	concha_l= (tan(concha_q) - 1.0)/(tan(concha_q) + 1.0);
 	conchaGainScalar=pow(10.0,conchaG/20.0);
 
 	conchaFilter_b[0]=concha_j;
 	conchaFilter_b[1]=0.0;
-	conchaFilter_b[2]=-concha_j;
+	conchaFilter_b[2]=-1.0*concha_j;
 	conchaFilter_a[0]=1.0;
-	conchaFilter_a[1]=-concha_k;
-	conchaFilter_a[2]=-concha_l;
+	conchaFilter_a[1]=-1.0*concha_k;
+	conchaFilter_a[2]=-1.0*concha_l;
 	recip_conchaFilter_a0=1.0/conchaFilter_a[0];
 
 	earCanal_q= PI * dt * (earCanalH - earCanalL);
@@ -439,20 +440,20 @@ void process_chan(REAL *in_buffer)
 	
 	for(i=0;i<SEGSIZE;i++)
 	{
-		//concha
-		concha= (conchaFilter_b[0]*in_buffer[i]
+		//concha (invert input gives rarefaction effect for positive pressure (?!))
+		concha= (conchaFilter_b[0]*-in_buffer[i]
 			+ conchaFilter_b[1]*past_input[0]
 			+ conchaFilter_b[2]*past_input[1]
 			- conchaFilter_a[1]*past_concha[0]
 			- conchaFilter_a[2]*past_concha[1]) * recip_conchaFilter_a0;
 		//update vars		
 		past_input[1]=past_input[0];
-		past_input[0]=in_buffer[i];
+		past_input[0]=-in_buffer[i];
 
 		past_concha[1]=past_concha[0];
 		past_concha[0]=concha;
 
-		earCanalInput= conchaGainScalar* concha + in_buffer[i];
+		earCanalInput= conchaGainScalar* concha - in_buffer[i];
 
 		//ear canal
 		earCanalRes= (earCanalFilter_b[0]*earCanalInput
@@ -490,6 +491,7 @@ void process_chan(REAL *in_buffer)
 		past_stapesDisp=stapesDisplacement;
 
 		MC_union.f = stapesDisplacement;
+		//MC_union.f = concha;//in_buffer[i];//recip_conchaFilter_a0;//in_buffer[i];//
 
        // log_info("payload = %d",MC_union.u);
 		//save to buffer

@@ -4303,7 +4303,7 @@ Disassembly of section RO_DATA:
     21e0:	4341434d 0000004b                       MCACK...
 
 000021e8 <build_date>:
-    21e8:	59ad4e95 2f637273 61746164 6570735f     .N.Ysrc/data_spe
+    21e8:	59b90b47 2f637273 61746164 6570735f     G..Ysrc/data_spe
     21f8:	69666963 69746163 632e6e6f 4e495b00     cification.c.[IN
     2208:	205d4f46 28202020 253a7325 3a296434     FO]    (%s:%4d):
     2218:	52445320 64204d41 20617461 69676562      SDRAM data begi
