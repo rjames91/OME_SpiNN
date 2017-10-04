@@ -22,10 +22,10 @@ import math
 logger = logging.getLogger(__name__)
 
 def calculate_additional_chips(num_rows,num_macks):
-    acc=0
+    acc=0.
     for i in range(num_rows-1):
         acc += num_macks**i
-    return numpy.ceil(acc/16)
+    return int(numpy.ceil(acc/16.))
 
 def run_model(
         data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,fs=44100,resample_factor=1,num_macks=4):
@@ -48,7 +48,6 @@ def run_model(
     # Get the number of cores available for use
     machine = g.machine()
 
-
     # Create a OME for each chip
     #omes = dict()
     #drnls = dict()
@@ -63,9 +62,14 @@ def run_model(
     macks=list()
 
     delays =  numpy.round(len(pole_freqs)*numpy.random.rand(len(pole_freqs)))
+    #create unique seeds for IHCAN instances
+    n_ihcans = n_chips*n_drnl*n_ihcan
+    random_range = numpy.arange(n_ihcans*4,dtype=numpy.uint32)
+    seeds = numpy.random.choice(random_range,n_ihcans*4,replace=False)
+    seed_index = 0
 
-    cf_index=0
-    count=0
+    cf_index = 0
+    count = 0
 
     #OME is on ethernet chip for live streaming
     for chip in machine.ethernet_connected_chips:
@@ -97,7 +101,8 @@ def run_model(
                 cf_index=cf_index+1
 
                 for j in range(n_ihcan):
-                    ihcan=IHCANVertex(drnl,resample_factor)
+                    ihcan = IHCANVertex(drnl,resample_factor,seeds[seed_index:seed_index+4])
+                    seed_index += 4
                     g.add_machine_vertex_instance(ihcan)
                     # constrain placement to local chip
                     ihcan.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))

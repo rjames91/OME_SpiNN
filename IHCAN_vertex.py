@@ -38,7 +38,7 @@ class IHCANVertex(
     """ A vertex that runs the DRNL algorithm
     """
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 7*4
+    _N_PARAMETER_BYTES = 11*4#7*4
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
@@ -50,7 +50,7 @@ class IHCANVertex(
     # the data type of the coreID
     _COREID_TYPE = DataType.UINT32
 
-    def __init__(self, drnl,resample_factor):#TODO:add Fs to params
+    def __init__(self, drnl,resample_factor,seed):#TODO:add Fs to params
         """
 
         :param ome: The connected ome vertex
@@ -64,7 +64,7 @@ class IHCANVertex(
         self._fs=drnl.fs
         self._num_data_points = 2 * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
         self._recording_size = (self._num_data_points/self._resample_factor) * 4#numpy.ceil(self._num_data_points/32.0)#
-
+        self._seed = seed
 
         self._data_size = (
             self._num_data_points * self._DATA_ELEMENT_TYPE.size +
@@ -169,6 +169,10 @@ class IHCANVertex(
         #Write the sampling frequency
         spec.write_value(
             self._fs, data_type=self._COREID_TYPE)
+
+        #Write the seed
+        data = numpy.array(self._seed, dtype=numpy.uint32)
+        spec.write_array(data.view(numpy.uint32))
 
         # Reserve and write the recording regions
         spec.reserve_memory_region(

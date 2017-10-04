@@ -9033,7 +9033,7 @@ Disassembly of section RO_DATA:
     6670:	00454d4f                                OME.
 
 00006674 <build_date>:
-    6674:	59bfa6a3 2f637273 61746164 6570735f     ...Ysrc/data_spe
+    6674:	59d23029 2f637273 61746164 6570735f     )0.Ysrc/data_spe
     6684:	69666963 69746163 632e6e6f 4e495b00     cification.c.[IN
     6694:	205d4f46 28202020 253a7325 3a296434     FO]    (%s:%4d):
     66a4:	52445320 64204d41 20617461 69676562      SDRAM data begi

@@ -7,28 +7,6 @@ import math
 from vision.spike_tools.vis.vis_tools import plot_output_spikes
 from signal_prep import *
 
-def test_filter(audio_data,b0,b1,b2,a0,a1,a2):
-    past_input=numpy.zeros(2)
-    past_concha=numpy.zeros(2)
-    concha=numpy.zeros(len(audio_data))
-    for i in range(441,len(audio_data)):
-        if i>=1202:
-            print ''
-        concha[i]=(b0 * audio_data[i]
-                  + b1 * audio_data[i-1]#past_input[0]
-                  + b2 * audio_data[i-2]#past_input[1]
-                  - a1 * concha[i-1]#past_concha[0]
-                  - a2 * concha[i-2]#past_concha[1]
-                     ) * a0
-
-        #past_input[1] = past_input[0]
-        #past_input[0] = audio_data[i]
-
-        #past_concha[1] = past_concha[0]
-        #past_concha[0] = concha[i]
-    return concha
-
-
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_4k",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_22k",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_44k",dtype='float32')
@@ -36,7 +14,7 @@ def test_filter(audio_data,b0,b1,b2,a0,a1,a2):
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1kate_22k",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1vowels_22k",dtype='float32')
 
-audio_data = generate_signal(freq=4000,dBSPL=80.,duration=0.5,modulation_freq=5.)
+audio_data = generate_signal(freq=2000,dBSPL=40.,duration=0.5,modulation_freq=0.)
 numpy.save('../Brainstem/audio_data.npy',audio_data)
 
 #concha = test_filter(audio_data,0.1783,0,-0.1783,1,-1.3477,0.6433)
@@ -45,7 +23,7 @@ numpy.save('../Brainstem/audio_data.npy',audio_data)
 
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
 #pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs_125",dtype='float32')
-pole_freqs = numpy.logspace(3.3,3.95,50)#64)
+pole_freqs = numpy.logspace(2,3.95,10)#64)
 #pole_freqs=[457, 6900]
 #pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs",dtype='float32')
 #pole_freqs=numpy.empty(25)#TODO:discover why this fails at 800+#
