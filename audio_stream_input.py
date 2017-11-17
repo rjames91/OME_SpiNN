@@ -1,6 +1,8 @@
 import pyaudio
 import wave
 import audioop
+from spinn_front_end_common.utilities.connections import LiveEventConnection
+
 
 
 FORMAT = pyaudio.paFloat32
@@ -11,6 +13,9 @@ RECORD_SECONDS = 1
 WAVE_OUTPUT_FILENAME = "file.wav"
 
 audio = pyaudio.PyAudio()
+
+#Live event connection
+live_samples = LiveEventConnection()
 
 # start Recording
 stream = audio.open(format=FORMAT, channels=CHANNELS,

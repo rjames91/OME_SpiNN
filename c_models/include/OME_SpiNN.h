@@ -19,7 +19,7 @@
 //#define SEED_SEL_SIZE (((MAX_CHIPX << 8) | MAX_CHIPY) << 8) | (MAX_COREID << 3)   
 #define SEED_SEL_SIZE 1024
 
-#define SEGSIZE 100
+#define SEGSIZE 96//100
 
 #define SAMPLING_FREQUENCY 44100.f
 

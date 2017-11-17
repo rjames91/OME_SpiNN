@@ -4,7 +4,7 @@ endif
 
 APP := OME#MCACK#
 BUILD_DIR = build/
-SOURCES = src/OME_SpiNN_pipe_MC.c#src/MCack_node.c#src/OME_SpiNN.c
+SOURCES = src/OME_SpiNN_pipe_MC.c#src/MCack_node.c#src/OME_SpiNN.c#
 MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 CURRENT_DIR := $(dir $(MAKEFILE_PATH))
 EXTRA_SRC_DIR := $(abspath $(CURRENT_DIR)/src) 

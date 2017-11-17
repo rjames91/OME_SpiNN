@@ -65,7 +65,7 @@ void app_init(void)
     log_info("parent key:%d",parent_key);
     log_info("child key:%d",child_key);
 
-    mask=1;
+    mask=3;//1;
     final_ack=0;
     sync_count=0;
 }
@@ -80,7 +80,8 @@ void sync_check(uint mc_key, uint null)
 {
     uint command= mc_key & mask;
 
-    if (command)//ack received from child
+    //if (command)//ack received from child
+    if (command==2)//ack received from child
     {
         sync_count++;
         log_info("ack mcpacket recieved from key=%d sync_count=%d",mc_key,sync_count);
@@ -88,7 +89,8 @@ void sync_check(uint mc_key, uint null)
         if(sync_count>=num_children)
         {
             //send acknowledgement to parent node
-            while (!spin1_send_mc_packet(parent_key+1, 0, NO_PAYLOAD)) {
+//            while (!spin1_send_mc_packet(parent_key+1, 0, NO_PAYLOAD)) {
+            while (!spin1_send_mc_packet(parent_key|2, 0, NO_PAYLOAD)) {
             spin1_delay_us(1);
             }
             //first wave of acks
@@ -104,11 +106,12 @@ void sync_check(uint mc_key, uint null)
             }
         }
     }
-    else//r2s received
+    else if(command==1)//else if(command==0)r2s received
     {
-      //  log_info("r2s received from parent");
+       // log_info("r2s received from parent");
         //send r2s to child nodes
-        while (!spin1_send_mc_packet(child_key, 0, NO_PAYLOAD)) {
+        //while (!spin1_send_mc_packet(child_key, 0, NO_PAYLOAD)) {
+        while (!spin1_send_mc_packet(child_key|1, 0, NO_PAYLOAD)) {
             spin1_delay_us(1);
         }
     }

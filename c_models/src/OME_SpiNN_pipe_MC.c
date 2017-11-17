@@ -166,8 +166,9 @@ void app_init(void)
     dt=(1.0/Fs);
 
     //real-time timer period calculation (us)
-    TIMER_TICK_PERIOD = (uint)(0.95*1e6 * ((REAL)SEGSIZE/Fs));
-  //  TIMER_TICK_PERIOD = 30000;
+    if(Fs<=22050.0f)TIMER_TICK_PERIOD = (uint)(0.95*1e6 * ((REAL)SEGSIZE/Fs));//RT
+    else TIMER_TICK_PERIOD = 5000;//Not RT
+
     log_info("timer period=%d",(uint)TIMER_TICK_PERIOD);
     log_info("Fs=%d",sampling_frequency);
     final_ack=0;
@@ -355,7 +356,8 @@ void app_end(uint null_a,uint null_b)
     else
     {
         log_info("All data has been sent seg_index=%d",seg_index);
-        while (!spin1_send_mc_packet(r2s_key, 0, NO_PAYLOAD)) {
+        //while (!spin1_send_mc_packet(r2s_key, 0, NO_PAYLOAD)) {
+        while (!spin1_send_mc_packet(r2s_key|1, 0, NO_PAYLOAD)) {
             spin1_delay_us(1);
         }
         final_ack=1;
@@ -373,7 +375,8 @@ void data_read(uint null_a, uint null_b)
 	{
 	    //log_info("sending r2s");
         //send ready to send MC packet
-	    while (!spin1_send_mc_packet(r2s_key, 0, NO_PAYLOAD)) {
+	    //while (!spin1_send_mc_packet(r2s_key, 0, NO_PAYLOAD)) {
+	    while (!spin1_send_mc_packet(r2s_key|1, 0, NO_PAYLOAD)) {
             spin1_delay_us(1);
         }
        // spin1_delay_us(1000);//to prevent unnecessarily frequent TX of r2s
@@ -595,6 +598,7 @@ void c_main()
   spin1_callback_on (MC_PACKET_RECEIVED,sync_check,-1);
 
   spin1_start (SYNC_WAIT);//(SYNC_NOWAIT);//
+
   
   app_done ();
 

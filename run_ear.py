@@ -7,15 +7,20 @@ import math
 from vision.spike_tools.vis.vis_tools import plot_output_spikes
 from signal_prep import *
 
-#audio_data=numpy.fromfile("./c_models/load_files/load1_1_4k",dtype='float32')
+Fs = 22050.
+seg_size = 96
+
+#audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_22k",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_44k",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_chirp",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1kate_22k",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1vowels_22k",dtype='float32')
 
-audio_data = generate_signal(freq=2000,dBSPL=40.,duration=0.5,modulation_freq=0.)
-numpy.save('../Brainstem/audio_data.npy',audio_data)
+audio_data = generate_signal(freq=1000,dBSPL=60.,duration=10.,
+                             modulation_freq=10.,Fs=Fs,ramp_duration=0.01,
+                             plt=plt)
+#numpy.save('../Brainstem/audio_data.npy',audio_data)
 
 #concha = test_filter(audio_data,0.1783,0,-0.1783,1,-1.3477,0.6433)
 
@@ -23,13 +28,13 @@ numpy.save('../Brainstem/audio_data.npy',audio_data)
 
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
 #pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs_125",dtype='float32')
-pole_freqs = numpy.logspace(2,3.95,10)#64)
+pole_freqs = numpy.logspace(2,3.95,64)#64)
 #pole_freqs=[457, 6900]
 #pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs",dtype='float32')
-#pole_freqs=numpy.empty(25)#TODO:discover why this fails at 800+#
+#pole_freqs=numpy.empty(25)#TODO:investigate intermitent simulation failures
 #pole_freqs.fill(8000.0)
-#pole_freqs=numpy.empty(352)
-#pole_freqs.fill(6900.0)
+#pole_freqs=numpy.empty(16)
+#pole_freqs.fill(4000.0)
 #pole_freqs=[30, 500, 1000, 2000, 3000, 4000, 5000, 6000, 7000]
 #pole_freqs=[4000,4000]
 #plt.figure()
@@ -41,7 +46,7 @@ pole_freqs = numpy.logspace(2,3.95,10)#64)
 #plt.show()
 
 #check audio data can be divided evenly into 100 sample segements
-audio_data = audio_data[0:int(numpy.floor(len(audio_data)/100)*100)]
+audio_data = audio_data[0:int(numpy.floor(len(audio_data)/seg_size)*seg_size)]
 #plt.figure()
 #plt.plot(audio_data)
 #plt.show
@@ -49,7 +54,7 @@ audio_data = audio_data[0:int(numpy.floor(len(audio_data)/100)*100)]
 #create framework of connected model vertices and run
 samples = model_launch_framework.run_model(
     audio_data, n_chips=numpy.ceil(len(pole_freqs)/2),n_drnl=2,
-    pole_freqs=pole_freqs,n_ihcan=5,fs=22050,resample_factor=1,num_macks=4)
+    pole_freqs=pole_freqs,n_ihcan=5,fs=Fs,resample_factor=1,num_macks=4)
 numpy.save("./samples.npy",samples)
 
 #samples=numpy.load("./samples.npy")
@@ -61,11 +66,12 @@ ihc_index=0
 
 
 #obtain list of IHCAN outputs
-ihc_output = [samples[x:x+2*int(numpy.floor(len(audio_data)/100))*100] for x in xrange(0, len(samples), 2*int(numpy.floor(len(audio_data)/100))*100)]
-drnl=numpy.zeros((len(pole_freqs)*10,int(numpy.floor(len(audio_data)/100))*100))
+ihc_output = [samples[x:x+2*int(numpy.floor(len(audio_data)/seg_size))*seg_size]
+              for x in xrange(0, len(samples), 2*int(numpy.floor(len(audio_data)/seg_size))*seg_size)]
+drnl=numpy.zeros((len(pole_freqs)*10,int(numpy.floor(len(audio_data)/seg_size))*seg_size))
 for ihc in ihc_output:
     #obtain fibre response
-    hsr = [ihc[x:x+100] for x in xrange(0,len(ihc),200)]
+    hsr = [ihc[x:x+seg_size] for x in xrange(0,len(ihc),seg_size*2)]
     #HSR = [item for sublist in hsr for item in sublist]
     HSR=numpy.concatenate(hsr,axis=0)
     drnl[-spike_index][:]=HSR
@@ -80,7 +86,7 @@ for ihc in ihc_output:
     spike_index=spike_index+1
 
     #obtain fibre response
-    lsr=[ihc[x:x+100] for x in xrange(100,len(ihc),200)]
+    lsr=[ihc[x:x+seg_size] for x in xrange(seg_size,len(ihc),seg_size*2)]
     LSR = numpy.concatenate(lsr,axis=0)
     drnl[-spike_index][:]=LSR
     #LSR = [item for sublist in lsr for item in sublist]
@@ -98,7 +104,7 @@ for ihc in ihc_output:
     ihc_index=ihc_index + 1
 
 #spike_trains=numpy.load("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_kate_a_10kfib.npy")
-duration = len(audio_data)/22050.0
+duration = len(audio_data)/Fs
 spike_times = [spike_time for (neuron_id, spike_time) in spike_trains]
 scale_factor = duration/numpy.max(spike_times)
 scaled_times = [spike_time * scale_factor for spike_time in spike_times]
@@ -132,7 +138,7 @@ plt.ylabel('AN fibre best frequency (Hz)')
 plt.show()
 
 # Save the results
-numpy.save("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_6k_640fib_50dB.npy", spike_trains)
+#numpy.save("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_6k_640fib_50dB.npy", spike_trains)
 #numpy.savetxt("./results.csv",drnl, fmt="%e", delimiter=",")
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", samples, fmt="%f", delimiter=",")
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/complete.txt",[1],fmt="%f")

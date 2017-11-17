@@ -1,4 +1,6 @@
 from pacman.model.graphs.machine import MachineVertex
+from pacman.model.graphs.application import ApplicationVertex
+
 from pacman.model.resources.resource_container import ResourceContainer
 from pacman.model.resources.dtcm_resource import DTCMResource
 from pacman.model.resources.sdram_resource import SDRAMResource
@@ -33,7 +35,9 @@ from spinn_machine.utilities.progress_bar import ProgressBar
 
 
 class OMEVertex(
-        MachineVertex, AbstractHasAssociatedBinary,
+        MachineVertex,
+        #ApplicationVertex,
+        AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
         AbstractProvidesNKeysForPartition
         ):
@@ -54,7 +58,9 @@ class OMEVertex(
     _COREID_TYPE = DataType.UINT32
 
     def __init__(self, data,fs,num_bfs,data_partition_name="OMEData",
-            acknowledge_partition_name="OMEDataAck",command_partition_name="OMECommand"):#TODO:add Fs to params
+            acknowledge_partition_name="OMEDataAck",command_partition_name="OMECommand"):
+    #def __init__(self, num_neurons, data, fs, num_bfs, data_partition_name="OMEData",
+    #         acknowledge_partition_name="OMEDataAck",command_partition_name="OMECommand"):
         """
 
         :param coordinator: The coordinator vertex
@@ -62,6 +68,7 @@ class OMEVertex(
         """
 
         MachineVertex.__init__(self, label="OME Node", constraints=None)
+        #ApplicationVertex.__init__(self, label="OME Node", constraints=None)
         AbstractProvidesNKeysForPartition.__init__(self)
         self._data = data
         self._data_partition_name = data_partition_name
@@ -213,7 +220,6 @@ class OMEVertex(
         # write the command key
         spec.write_value(routing_info.get_routing_info_from_pre_vertex(
             self,self._command_partition_name).first_key, data_type=DataType.UINT32)
-
 
         # Write the data - Arrays must be 32-bit values, so convert
         data = numpy.array(self._data, dtype=self._NUMPY_DATA_ELEMENT_TYPE)

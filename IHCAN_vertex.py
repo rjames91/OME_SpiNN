@@ -63,7 +63,7 @@ class IHCANVertex(
         self._resample_factor=resample_factor
         self._fs=drnl.fs
         self._num_data_points = 2 * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
-        self._recording_size = (self._num_data_points/self._resample_factor) * 4#numpy.ceil(self._num_data_points/32.0)#
+        self._recording_size = (self._num_data_points/self._resample_factor) * 4 * 1./32#numpy.ceil(self._num_data_points/32.0)#
         self._seed = seed
 
         self._data_size = (
@@ -118,7 +118,7 @@ class IHCANVertex(
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
-        return 2  # 2 for control IDs
+        return 4#2  # 2 for control IDs
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
@@ -183,7 +183,6 @@ class IHCANVertex(
         spec.write_array(recording_utilities.get_recording_header_array(
             [self._recording_size], ip_tags=ip_tags))
 
-
 #        print "IHCAN DRNL placement=",DRNL_placement
 
         #print "IHCAN placement=",placement.p
@@ -201,16 +200,19 @@ class IHCANVertex(
         numpy_format=list()
 
         numpy_format.append(("AN",numpy.float32))
+        #numpy_format.append(("AN", numpy.uint32))
 
-        formatted_data = numpy.array(data, dtype=numpy.uint8).view(numpy_format)
-
+        #formatted_data = numpy.array(data, dtype=numpy.uint8).view(numpy_format)
+        formatted_data = numpy.array(data, dtype=numpy.uint8)
+        unpacked = numpy.unpackbits(formatted_data)
         #check all expected data has been recorded
-        if len(formatted_data) != self._num_data_points/self._resample_factor:
+        if len(unpacked) != self._num_data_points/self._resample_factor:
             #if not set output to zeros of correct length, this will cause an error flag in run_ear.py
-            formatted_data = numpy.zeros(self._num_data_points)
+            unpacked = numpy.zeros(self._num_data_points/self._resample_factor)
 
         # Convert the data into an array of state variables
-        return formatted_data
+        #return formatted_data
+        return unpacked.astype(numpy.float32)
 
     def get_minimum_buffer_sdram_usage(self):
         return 1024

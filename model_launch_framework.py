@@ -28,7 +28,8 @@ def calculate_additional_chips(num_rows,num_macks):
     return int(numpy.ceil(acc/16.))
 
 def run_model(
-        data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,fs=44100,resample_factor=1,num_macks=4):
+        data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,
+        fs=44100,resample_factor=1,num_macks=4,seg_size=96):
     """ Executes an MCMC model, returning the received samples
 
     :param data: The audio input data
@@ -235,7 +236,7 @@ def run_model(
 
     print "channels running: ",len(drnls)
     print "output data: {} fibres with length {}".format(len(ihcans)*2,len(samples))
-    if(len(samples) != len(ihcans)*2*numpy.floor(len(data)/100)*100):
-        print "samples length {} isn't expected size {}".format(len(samples),len(ihcans)*2*numpy.floor(len(data)/100)*100)
+    if(len(samples) != len(ihcans)*2*numpy.floor(len(data)/seg_size)*seg_size):
+        print "samples length {} isn't expected size {}".format(len(samples),len(ihcans)*2*numpy.floor(len(data)/seg_size)*seg_size)
 
     return samples

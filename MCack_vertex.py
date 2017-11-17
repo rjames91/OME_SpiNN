@@ -146,7 +146,7 @@ class MCackVertex(
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
-        return 2  # two for control IDs
+        return 4#2  # two for control IDs
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
