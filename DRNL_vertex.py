@@ -19,8 +19,7 @@ from spinn_front_end_common.interface.buffer_management.buffer_models\
 from spinn_front_end_common.utilities import helpful_functions
 from spinn_front_end_common.interface.buffer_management \
     import recording_utilities
-from spinn_front_end_common.utilities.utility_objs.executable_start_type \
-    import ExecutableStartType
+from spinn_front_end_common.utilities.utility_objs import ExecutableType
 
 from enum import Enum
 import numpy
@@ -31,11 +30,16 @@ from spinn_front_end_common.abstract_models\
 
 from spinn_machine.utilities.progress_bar import ProgressBar
 
+from spinn_front_end_common.interface.profiling.abstract_has_profile_data \
+    import AbstractHasProfileData
+from spinn_front_end_common.interface.profiling import profile_utils
+
 
 class DRNLVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
-        AbstractProvidesNKeysForPartition
+        AbstractProvidesNKeysForPartition,
+        AbstractHasProfileData
         ):
     """ A vertex that runs the DRNL algorithm
     """
@@ -51,6 +55,13 @@ class DRNLVertex(
     _KEY_ELEMENT_TYPE = DataType.UINT32
     # the data type of the coreID
     _COREID_TYPE = DataType.UINT32
+
+    PROFILE_TAG_LABELS = {
+        0: "TIMER",
+        1: "DMA_READ",
+        2: "INCOMING_SPIKE",
+        3: "PROCESS_FIXED_SYNAPSES",
+        4: "PROCESS_PLASTIC_SYNAPSES"}
 
     def __init__(self, ome,CF,delay,data_partition_name="DRNLData",
             acknowledge_partition_name="DRNLDataAck"):
@@ -83,6 +94,9 @@ class DRNLVertex(
 
         self._data_partition_name = data_partition_name
         self._acknowledge_partition_name = acknowledge_partition_name
+
+        # Set up for profiling
+        self._n_profile_samples = 10000
 
     def register_processor(self, ihcan_vertex):
         self._ihcan_vertices.append(ihcan_vertex)
@@ -138,6 +152,7 @@ class DRNLVertex(
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES + self._data_size
         sdram += len(self._ihcan_vertices) * self._KEY_ELEMENT_TYPE.size
+        sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 
         resources = ResourceContainer(
             dtcm=DTCMResource(0),
@@ -152,11 +167,17 @@ class DRNLVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
-        return ExecutableStartType.SYNC
+        return ExecutableType.SYNC
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
         return 4#2  # two for control IDs
+
+    @overrides(AbstractHasProfileData.get_profile_data)
+    def get_profile_data(self, transceiver, placement):
+        return profile_utils.get_profiling_data(
+            1,
+            self.PROFILE_TAG_LABELS, transceiver, placement)
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
@@ -176,6 +197,11 @@ class DRNLVertex(
         region_size = self._N_PARAMETER_BYTES
         region_size += (1 + len(self._ihcan_vertices)) * self._KEY_ELEMENT_TYPE.size
         spec.reserve_memory_region(0, region_size)
+        #reserve profile region
+        profile_utils.reserve_profile_region(
+            spec, 1,
+            self._n_profile_samples)
+
         spec.switch_write_focus(0)
 
         # Get the placement of the vertices and find out how many chips
@@ -234,8 +260,10 @@ class DRNLVertex(
         spec.write_value(self._fs,data_type=DataType.UINT32)
 
     #    print "DRNL OME placement=",OME_placement
-
    #     print "DRNL placement=",placement.p
+        profile_utils.write_profile_region_data(
+            spec, 1,
+            self._n_profile_samples)
 
         # End the specification
         spec.end_specification()

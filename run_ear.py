@@ -1,25 +1,24 @@
 import numpy
 import model_launch_framework
-#from mcmc_examples.lighthouse.lighthouse_model import LightHouseModel
 from scipy.io import wavfile
 import pylab as plt
 import math
 from vision.spike_tools.vis.vis_tools import plot_output_spikes
 from signal_prep import *
 
-Fs = 22050.
+Fs = 22050.#44100.
 seg_size = 96
 
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_22k",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_44k",dtype='float32')
-#audio_data=numpy.fromfile("./c_models/load_files/load1_1_chirp",dtype='float32')
+audio_data=numpy.fromfile("./c_models/load_files/load1_1_chirp",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1kate_22k",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1vowels_22k",dtype='float32')
 
-audio_data = generate_signal(freq=1000,dBSPL=60.,duration=10.,
-                             modulation_freq=10.,Fs=Fs,ramp_duration=0.01,
-                             plt=plt)
+#audio_data = generate_signal(freq=1000,dBSPL=60.,duration=10.,
+#                             modulation_freq=10.,Fs=Fs,ramp_duration=0.01,
+#                             plt=plt)
 #numpy.save('../Brainstem/audio_data.npy',audio_data)
 
 #concha = test_filter(audio_data,0.1783,0,-0.1783,1,-1.3477,0.6433)
@@ -28,7 +27,7 @@ audio_data = generate_signal(freq=1000,dBSPL=60.,duration=10.,
 
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
 #pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs_125",dtype='float32')
-pole_freqs = numpy.logspace(2,3.95,64)#64)
+pole_freqs = numpy.logspace(2,3.95,10)#64)
 #pole_freqs=[457, 6900]
 #pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs",dtype='float32')
 #pole_freqs=numpy.empty(25)#TODO:investigate intermitent simulation failures
@@ -142,3 +141,4 @@ plt.show()
 #numpy.savetxt("./results.csv",drnl, fmt="%e", delimiter=",")
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", samples, fmt="%f", delimiter=",")
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/complete.txt",[1],fmt="%f")
+print "total stimulus time=",(len(audio_data)/Fs)

@@ -19,10 +19,12 @@
 #include "stdfix-exp.h"
 #include "log.h"
 #include <data_specification.h>
+#include <profiler.h>
+#include <profile_tags.h>
 
 
 //#define TOTAL_TICKS 62//240//173//197
-//#define PROFILE
+#define PROFILE
 //#define LOOP_PROFILE
 //#define PRINT
 
@@ -220,7 +222,7 @@ void app_init(void)
 				   (uint) dtcm_buffer_a);
 		io_printf (IO_BUF, "[core %d] profile buffer @ 0x%08x\n", coreID,
 				   (uint) profile_buffer);	*/
-	}
+
 	
 	//============MODEL INITIALISATION================//
     BFlength = params[NUM_BFS];
@@ -303,9 +305,12 @@ void app_init(void)
 #ifdef PROFILE
     // configure timer 2 for profiling
     // enabled, free running, interrupt disabled, no pre-scale, 32 bit, free-running mode
-    tc[T2_CONTROL] = TIMER2_CONF;
+    //tc[T2_CONTROL] = TIMER2_CONF;
+        // Setup profiler
+    profiler_init(
+        data_specification_get_region(1, data_address));
 #endif
-    
+	}
 }
 void data_write(uint null_a, uint null_b)
 {
@@ -330,9 +335,6 @@ void data_write(uint null_a, uint null_b)
 			io_printf (IO_BUF, "buff_y write\n");
 #endif
 		}
-#ifdef PROFILE
-  start_count_write = tc[T2_COUNT];
-#endif
 		spin1_dma_transfer(DMA_WRITE,&sdramout_buffer[out_index],dtcm_buffer_out,DMA_WRITE,
 		  						SEGSIZE*sizeof(REAL));
 #ifdef PRINT
@@ -368,8 +370,9 @@ void app_end(uint null_a,uint null_b)
 void data_read(uint null_a, uint null_b)
 {
 #ifdef PROFILE
-  start_count_read = tc[T2_COUNT];
+    profiler_write_entry_disable_irq_fiq(PROFILER_ENTER | PROFILER_TIMER);
 #endif
+
 	REAL *dtcm_buffer_in;
 	if(test_DMA == TRUE && sync_count<num_macks && seg_index==0)
 	{
@@ -385,7 +388,10 @@ void data_read(uint null_a, uint null_b)
 	//read from DMA and copy into DTCM
 	else if(read_ticks<TOTAL_TICKS && test_DMA == TRUE && sync_count==num_macks)
 	{
-	    if(seg_index==0)start_count_full = tc[T2_COUNT];
+	    #ifdef PROFILE
+	    if(seg_index==0)profiler_write_entry_disable_irq_fiq(PROFILER_ENTER | PROFILER_DMA_READ);
+        #endif
+	    //if(seg_index==0)start_count_full = tc[T2_COUNT];
 
 	    //log_info("read_ticks=%d",read_ticks);
 	    read_ticks++;
@@ -410,8 +416,8 @@ void data_read(uint null_a, uint null_b)
 	    if(final_ack==1)//2nd time in this call therefore
 	                    //child models have replied with finished processing acks
 	    {
-            end_count_full = tc[T2_COUNT];
-            log_info("[Chip%d] total processing time=%d ticks",chipID,start_count_full-end_count_full);
+           // end_count_full = tc[T2_COUNT];
+           // log_info("[Chip%d] total processing time=%d ticks",chipID,start_count_full-end_count_full);
             spin1_schedule_callback(app_end,NULL,NULL,2);
 	    }
 	    else
@@ -428,12 +434,14 @@ void data_read(uint null_a, uint null_b)
         spin1_exit(0);
         io_printf (IO_BUF, "spinn_exit\n");*/
 	}
+	#ifdef PROFILE
+    profiler_write_entry_disable_irq_fiq(PROFILER_EXIT | PROFILER_TIMER);
+    #endif
 }
 
 void process_chan(REAL *in_buffer)
 {
 	uint i,j,k;
-		
 	uint si=0;
 	REAL concha,earCanalInput,earCanalRes,earCanalOutput,ARoutput,stapesVelocity,stapesDisplacement;
 		
@@ -504,7 +512,7 @@ void process_chan(REAL *in_buffer)
             spin1_delay_us(1);
         }
 	}
-    log_info("processing complete %d",seg_index);
+    //log_info("processing complete %d",seg_index);
 }
 
 void transfer_handler(uint tid, uint ttag)
@@ -512,8 +520,8 @@ void transfer_handler(uint tid, uint ttag)
 	if (ttag==DMA_READ)
 	{
 #ifdef PROFILE
-  end_count_read = tc[T2_COUNT];
-  dtcm_profile_buffer[seg_index*3]=(REAL)(start_count_read-end_count_read);
+  //end_count_read = tc[T2_COUNT];
+  //dtcm_profile_buffer[seg_index*3]=(REAL)(start_count_read-end_count_read);
 #endif
   //io_printf (IO_BUF, "read complete in %d ticks\n",start_count_read-end_count_read);
 
@@ -529,7 +537,7 @@ void transfer_handler(uint tid, uint ttag)
 		    cbuff_index=1;
 		}*/
 		#ifdef PROFILE
-		  start_count_process = tc[T2_COUNT];
+		 // start_count_process = tc[T2_COUNT];
 		#endif
 		
 		//choose current buffers
@@ -560,6 +568,12 @@ void sync_check(uint mc_key, uint null)
 
 void app_done ()
 {
+#ifdef PROFILE
+  //profiler_write_entry_disable_irq_fiq(PROFILER_EXIT | PROFILER_TIMER);
+  profiler_write_entry_disable_irq_fiq(PROFILER_EXIT | PROFILER_DMA_READ);
+  profiler_finalise();
+#endif
+
   // report simulation time
   io_printf (IO_BUF, "[core %d] simulation lasted %d ticks\n", coreID,
              spin1_get_simulation_time());
@@ -567,10 +581,10 @@ void app_done ()
   //copy profile data
 #ifdef PROFILE
   //io_printf (IO_BUF, "[core %d] saving profile data...\n", coreID);
-	for (uint i=0;i<3*TOTAL_TICKS;i++)
+	/*for (uint i=0;i<3*TOTAL_TICKS;i++)
 	{
 	//	profile_buffer[i]  = dtcm_profile_buffer[i];
-	}
+	}*/
 #endif
   
   // say goodbye
@@ -588,7 +602,6 @@ void c_main()
 
   //set timer tick
   spin1_set_timer_tick (TIMER_TICK_PERIOD);
-
   //setup callbacks
   //process channel once data input has been read to DTCM
   spin1_callback_on (DMA_TRANSFER_DONE,transfer_handler,1);
