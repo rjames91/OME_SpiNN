@@ -29,7 +29,7 @@ def calculate_additional_chips(num_rows,num_macks):
 
 def run_model(
         data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,
-        fs=44100,resample_factor=1,num_macks=4,seg_size=96):
+        fs=44100,resample_factor=1,num_macks=4,seg_size=96,bitfield=True):
     """ Executes an MCMC model, returning the received samples
 
     :param data: The audio input data
@@ -102,7 +102,8 @@ def run_model(
                 cf_index=cf_index+1
 
                 for j in range(n_ihcan):
-                    ihcan = IHCANVertex(drnl,resample_factor,seeds[seed_index:seed_index+4])
+                    ihcan = IHCANVertex(drnl,resample_factor,
+                                        seeds[seed_index:seed_index+4],bitfield=bitfield)
                     seed_index += 4
                     g.add_machine_vertex_instance(ihcan)
                     # constrain placement to local chip
@@ -207,11 +208,13 @@ def run_model(
         raise ValueError('failed to setup MC ack tree structure')
 
 # Run the simulation
-    g.run(None)
+    #duration = (len(data)/fs) * 1000.
+    #g.run(duration)
+    g.run_until_complete()
 
     # Wait for the application to finish
-    txrx = g.transceiver()
-    app_id = globals_variables.get_simulator()._app_id
+    #txrx = g.transceiver()
+    '''app_id = globals_variables.get_simulator()._app_id
     #logger.info("Running {} worker cores".format(n_workers))
     logger.info("Waiting for application to finish...")
     running = txrx.get_core_state_count(app_id, CPUState.RUNNING)
@@ -223,7 +226,7 @@ def run_model(
             error_msg = "Some cores have failed ({} RTE, {} WDOG)".format(
                 error, watchdog)
             raise Exception(error_msg)
-        running = txrx.get_core_state_count(app_id, CPUState.RUNNING)
+        running = txrx.get_core_state_count(app_id, CPUState.RUNNING)'''
 
     # Get the data back
     samples = list()

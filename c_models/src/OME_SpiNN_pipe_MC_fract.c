@@ -45,14 +45,16 @@ uint final_ack;
 
 uint_float_union MC_union;
 
-REAL conchaL,conchaH,conchaG,earCanalL,earCanalH,earCanalG,stapesH,stapesL,stapesScalar,
+REAL conchaL,conchaH,conchaG,earCanalL,earCanalH,earCanalG,stapesH,stapesL,
 	ARtau,ARdelay,ARrateThreshold,rateToAttenuationFactor,BFlength;
 
 REAL concha_q,concha_j,concha_k,concha_l,conchaGainScalar,recip_conchaFilter_a0,
 	earCanal_q,earCanal_j,earCanal_k,earCanal_l,earCanalGainScalar,recip_earCanalFilter_a0,
-	ARatt,Wn,stapesHP_order,sf,stapesLP_b,stapes_tau,past_stapesDisp;
+	ARatt,Wn,stapesHP_order,sf,stapesLP_b,stapes_tau;
 
-REAL conchaFilter_b[3],conchaFilter_a[3],earCanalFilter_b[3],earCanalFilter_a[3],stapesHP_b[3],stapesHP_a[3],stapesLP_a[2],past_input[2],past_concha[2],past_earCanalInput[2],past_earCanal[2],past_stapesInput[2]
+fract	stapesScalar,past_stapesDisp;
+
+fract conchaFilter_b[3],conchaFilter_a[3],earCanalFilter_b[3],earCanalFilter_a[3],stapesHP_b[3],stapesHP_a[3],stapesLP_a[2],past_input[2],past_concha[2],past_earCanalInput[2],past_earCanal[2],past_stapesInput[2]
 ,past_stapes[2];
 
 
@@ -196,8 +198,8 @@ void app_init(void)
     //if(Fs<=22050.0f)TIMER_TICK_PERIOD = (uint)(0.95*1e6 * ((REAL)SEGSIZE/Fs));//RT
     //else TIMER_TICK_PERIOD = 5000;//Not RT
    // TIMER_TICK_PERIOD = (uint)(0.95*1e6 * ((REAL)SEGSIZE/Fs));//RT
-    TIMER_TICK_PERIOD = (uint)((1e6 * ((REAL)SEGSIZE/Fs))+0.5);//RT
-    //TIMER_TICK_PERIOD = 5000;//Not RT
+    //TIMER_TICK_PERIOD = (uint)((1e6 * ((REAL)SEGSIZE/Fs))+0.5);//RT
+    TIMER_TICK_PERIOD = 5000;//Not RT
      //TIMER_TICK_PERIOD = (uint)(0.8*1e6 * ((REAL)SEGSIZE/Fs));//RT
     //TODO: need to reconsider the running speed needed for total RT performance as the MC TX overhead is large
     //TIMER_TICK_PERIOD = (uint)(1e6 * ((REAL)SEGSIZE/48000.0));//top speed
@@ -291,21 +293,21 @@ void app_init(void)
 	earCanal_l= (tan(earCanal_q) - 1.0)/(tan(earCanal_q) + 1.0);
 	earCanalGainScalar=pow(10.0,earCanalG/20.0);
 
-	earCanalFilter_b[0]=earCanal_j;
-	earCanalFilter_b[1]=0.0;
-	earCanalFilter_b[2]=-earCanal_j;
-	earCanalFilter_a[0]=1.0;
-	earCanalFilter_a[1]=-earCanal_k;
-	earCanalFilter_a[2]=-earCanal_l;
-	recip_earCanalFilter_a0=1.0/earCanalFilter_a[0];
+	earCanalFilter_b[0]=(fract)earCanal_j;
+	earCanalFilter_b[1]=(fract)0.0;
+	earCanalFilter_b[2]=(fract)-earCanal_j;
+	earCanalFilter_a[0]=(fract)1.0;
+	earCanalFilter_a[1]=(fract)-earCanal_k;
+	earCanalFilter_a[2]=(fract)-earCanal_l;
+	recip_earCanalFilter_a0=(fract)1.0/earCanalFilter_a[0];
 
 	//stapes filter coeffs pre generated due to butterworth calc code overflow
-	stapesHP_b[0] = params.SHB1;//0;//0.868412544196881;//0.931905;
-	stapesHP_b[1] = params.SHB2;//0;//-1.736825088393761;//-1.863809;
-	stapesHP_b[2] = params.SHB3;//0;//0.868412544196881;//0.931905;
-	stapesHP_a[0] = params.SHA1;//0;//1.0;
-	stapesHP_a[1] = params.SHA2;//0;//-1.719434219286951;//-1.859167;
-	stapesHP_a[2] = params.SHA3;//0;//0.754215957500572;//0.868451;
+	stapesHP_b[0] = (fract)params.SHB1;//0;//0.868412544196881;//0.931905;
+	stapesHP_b[1] = (fract)params.SHB2;//0;//-1.736825088393761;//-1.863809;
+	stapesHP_b[2] = (fract)params.SHB3;//0;//0.868412544196881;//0.931905;
+	stapesHP_a[0] = (fract)params.SHA1;//0;//1.0;
+	stapesHP_a[1] = (fract)params.SHA2;//0;//-1.719434219286951;//-1.859167;
+	stapesHP_a[2] = (fract)params.SHA3;//0;//0.754215957500572;//0.868451;
 
     /*log_info("shp_b0:%k",(accum)stapesHP_b[0]);
     log_info("shp_b1:%k",(accum)stapesHP_b[1]);
@@ -319,24 +321,24 @@ void app_init(void)
 	stapesLP_a[1]= dt/stapes_tau -1.0;
 	stapesLP_b= 1.0 + stapesLP_a[1];
 
-	past_input[0]=0.0;
-	past_input[1]=0.0;
-	past_concha[0]=0.0;
-	past_concha[1]=0.0;
+	past_input[0]=(fract)0.0;
+	past_input[1]=(fract)0.0;
+	past_concha[0]=(fract)0.0;
+	past_concha[1]=(fract)0.0;
 
-	past_earCanalInput[0]=0.0;
-	past_earCanalInput[1]=0.0;
-	past_earCanal[0]=0.0;
-	past_earCanal[1]=0.0;
+	past_earCanalInput[0]=(fract)0.0;
+	past_earCanalInput[1]=(fract)0.0;
+	past_earCanal[0]=(fract)0.0;
+	past_earCanal[1]=(fract)0.0;
 
-	ARatt=1.0; //TODO: change this to be determined by spiking input
+	ARatt=(fract)1.0; //TODO: change this to be determined by spiking input
 
-	past_stapesInput[0]=0.0;
-	past_stapesInput[1]=0.0;
-	past_stapes[0]=0.0;
-	past_stapes[1]=0.0;
+	past_stapesInput[0]=(fract)0.0;
+	past_stapesInput[1]=(fract)0.0;
+	past_stapes[0]=(fract)0.0;
+	past_stapes[1]=(fract)0.0;
 
-	past_stapesDisp=0.0;		
+	past_stapesDisp=(fract)0.0;
 
 #ifdef PROFILE
     // configure timer 2 for profiling
@@ -475,8 +477,7 @@ void process_chan(REAL *in_buffer)
         profiler_write_entry_disable_irq_fiq(PROFILER_ENTER | PROFILER_TIMER);
     #endif
 	uint i,j,k;
-	uint si=0;
-	REAL concha,earCanalInput,earCanalRes,earCanalOutput,ARoutput,stapesVelocity,stapesDisplacement;
+	fract concha,earCanalInput,earCanalRes,earCanalOutput,ARoutput,stapesVelocity,stapesDisplacement;
 		
 #ifdef PRINT
 	io_printf (IO_BUF, "[core %d] segment %d (offset=%d) starting processing\n", coreID,seg_index,segment_offset);
@@ -484,30 +485,8 @@ void process_chan(REAL *in_buffer)
 	
 	for(i=0;i<SEGSIZE;i++)
 	{
-	    if(0)//ABS(in_buffer[i])< 1e-16 && ABS(past_input[0])< 1e-16 && ABS(past_input[1])< 1e-16)
-	    {
-            past_input[0]=0.0;
-            past_input[1]=0.0;
-            past_concha[0]=0.0;
-            past_concha[1]=0.0;
-
-            past_earCanalInput[0]=0.0;
-            past_earCanalInput[1]=0.0;
-            past_earCanal[0]=0.0;
-            past_earCanal[1]=0.0;
-
-            past_stapesInput[0]=0.0;
-            past_stapesInput[1]=0.0;
-            past_stapes[0]=0.0;
-            past_stapes[1]=0.0;
-
-            past_stapesDisp=0.0;
-            //stapesDisplacement=0.0;
-	    }
-	    else
-	    {
 		//concha
-		concha= (conchaFilter_b[0]*in_buffer[i]
+		concha= (conchaFilter_b[0]*(fract)in_buffer[i]
 			+ conchaFilter_b[1]*past_input[0]
 			+ conchaFilter_b[2]*past_input[1]
 			- conchaFilter_a[1]*past_concha[0]
@@ -541,7 +520,8 @@ void process_chan(REAL *in_buffer)
 		earCanalOutput= earCanalGainScalar * earCanalRes + earCanalInput;
 
 		//AR
-		ARoutput= ARatt * stapesScalar * earCanalOutput;
+		//ARoutput= ARatt * stapesScalar * earCanalOutput;
+		ARoutput= stapesScalar * earCanalOutput;
 
 		//stapes velocity
 		stapesVelocity= stapesHP_b[0] * ARoutput + 
@@ -554,16 +534,18 @@ void process_chan(REAL *in_buffer)
 		past_stapesInput[0]= ARoutput;
 		past_stapes[1]= past_stapes[0];
 		past_stapes[0]= stapesVelocity;
+
 		//if (ABS(stapesVelocity) < 1e-14) stapesVelocity = 0.0;//prevent small value calc performance drop
 
 		//stapes displacement
 		stapesDisplacement= stapesLP_b * stapesVelocity - stapesLP_a[1] * past_stapesDisp;
 		//update vars
 		past_stapesDisp=stapesDisplacement;
-        }
 
 		//if (ABS(stapesDisplacement) < 1e-14) stapesDisplacement = 0.0;//prevent small value calc performance drop
-		MC_union.f = stapesDisplacement;
+
+		MC_union.f = (float)stapesDisplacement;
+
 		//MC_union.f = earCanalRes;//in_buffer[i];//earCanalInput;//recip_conchaFilter_a0;//in_buffer[i];//
 
        // log_info("payload = %d",MC_union.u);

@@ -31,6 +31,7 @@ from spinn_front_end_common.abstract_models\
 
 from enum import Enum
 import numpy
+import scipy.signal as sig
 
 from spinn_machine.utilities.progress_bar import ProgressBar
 from spynnaker.pyNN.utilities import constants
@@ -41,7 +42,7 @@ from spinn_front_end_common.interface.profiling.abstract_has_profile_data \
     import AbstractHasProfileData
 from spinn_front_end_common.interface.profiling import profile_utils
 
-
+profile = True
 class OMEVertex(
         MachineVertex,
         #ApplicationVertex,
@@ -54,7 +55,7 @@ class OMEVertex(
     """
 
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 6*4
+    _N_PARAMETER_BYTES = 12*4#6*4
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
@@ -74,7 +75,7 @@ class OMEVertex(
         4: "PROCESS_PLASTIC_SYNAPSES"}
 
     def __init__(self, data,fs,num_bfs,data_partition_name="OMEData",
-            acknowledge_partition_name="OMEDataAck",command_partition_name="OMECommand"):
+            acknowledge_partition_name="OMEAck",command_partition_name="OMECommand"):
     #def __init__(self, num_neurons, data, fs, num_bfs, data_partition_name="OMEData",
     #         acknowledge_partition_name="OMEDataAck",command_partition_name="OMECommand"):
         """
@@ -105,6 +106,9 @@ class OMEVertex(
         self._sdram_usage = (
             self._N_PARAMETER_BYTES + self._data_size
         )
+        # calculate stapes hpf coefficients
+        Wn = 1. / self._fs * 2. * 700.
+        [self._shb, self._sha] = sig.butter(2, Wn, 'high')
 
         # Set up for profiling
         self._n_profile_samples = 10000
@@ -130,6 +134,10 @@ class OMEVertex(
     def get_acknowledge_key(self, placement, routing_info):
         key = routing_info.get_first_key_from_pre_vertex(
             placement.vertex, self._acknowledge_partition_name)
+        if key == 0:
+            print "0 key"
+      #      raise Exception("0 value key detected!")
+      #  else:
         return key
 
     def get_mask(self, placement, routing_info):
@@ -153,7 +161,8 @@ class OMEVertex(
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES + self._data_size
         sdram += len(self._drnl_vertices) * self._KEY_ELEMENT_TYPE.size
-        sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
+        if profile:
+            sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 
         resources = ResourceContainer(
             dtcm=DTCMResource(0),
@@ -172,13 +181,14 @@ class OMEVertex(
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
-        return 2  # 2 for control IDs
+        return 4#2  # 2 for control IDs
 
-    @overrides(AbstractHasProfileData.get_profile_data)
-    def get_profile_data(self, transceiver, placement):
-        return profile_utils.get_profiling_data(
-            1,
-            self.PROFILE_TAG_LABELS, transceiver, placement)
+    if profile:
+        @overrides(AbstractHasProfileData.get_profile_data)
+        def get_profile_data(self, transceiver, placement):
+            return profile_utils.get_profiling_data(
+                1,
+                self.PROFILE_TAG_LABELS, transceiver, placement)
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
@@ -196,10 +206,11 @@ class OMEVertex(
         region_size += len(self._drnl_vertices) * self._KEY_ELEMENT_TYPE.size
         spec.reserve_memory_region(0, region_size)
 
-        #reserve profile region
-        profile_utils.reserve_profile_region(
-            spec, 1,
-            self._n_profile_samples)
+        if profile:
+            #reserve profile region
+            profile_utils.reserve_profile_region(
+                spec, 1,
+                self._n_profile_samples)
 
         spec.switch_write_focus(0)
 
@@ -242,29 +253,56 @@ class OMEVertex(
 
         # Write the key
         if len(keys)>0:
-            spec.write_value(routing_info.get_routing_info_from_pre_vertex(
-                self, self._data_partition_name).first_key, data_type=DataType.UINT32)
+            data_key_orig = routing_info.get_routing_info_from_pre_vertex(
+                self, self._data_partition_name).first_key
+            data_key = routing_info.get_first_key_from_pre_vertex(
+                self, self._data_partition_name)
+            if data_key == 0:
+                print
+                #raise Exception("0 value key detected!")
+            #else:
+            spec.write_value(data_key, data_type=DataType.UINT32)
         else:
-            spec.write_value(0, data_type=DataType.UINT32)
+            raise Exception("no ome key generated!")
+            #spec.write_value(0, data_type=DataType.UINT32)
 
         # write the command key
-        spec.write_value(routing_info.get_routing_info_from_pre_vertex(
-            self,self._command_partition_name).first_key, data_type=DataType.UINT32)
+        command_key = routing_info.get_first_key_from_pre_vertex(
+            self,self._command_partition_name)
+        if command_key==0:
+            print
+            #raise Exception("0 value key detected!")
+        #else:
+        spec.write_value(command_key, data_type=DataType.UINT32)
+
+        #spec.write_value(routing_info.get_routing_info_from_pre_vertex(
+        #    self,self._command_partition_name).first_key, data_type=DataType.UINT32)
+
+        # write the stapes high pass filter coefficients
+        spec.write_value(
+            numpy.float32(self._shb[0]), data_type=DataType.FLOAT_32)
+        spec.write_value(
+            numpy.float32(self._shb[1]), data_type=DataType.FLOAT_32)
+        spec.write_value(
+            numpy.float32(self._shb[2]), data_type=DataType.FLOAT_32)
+        spec.write_value(
+            numpy.float32(self._sha[0]), data_type=DataType.FLOAT_32)
+        spec.write_value(
+            numpy.float32(self._sha[1]), data_type=DataType.FLOAT_32)
+        spec.write_value(
+            numpy.float32(self._sha[2]), data_type=DataType.FLOAT_32)
 
         # Write the data - Arrays must be 32-bit values, so convert
         data = numpy.array(self._data, dtype=self._NUMPY_DATA_ELEMENT_TYPE)
         spec.write_array(data.view(numpy.uint32))
 
-        profile_utils.write_profile_region_data(
-            spec, 1,
-            self._n_profile_samples)
+
+        if profile:
+            profile_utils.write_profile_region_data(
+                spec, 1, self._n_profile_samples)
 
         # End the specification
         spec.end_specification()
-
-    @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
-    def get_n_keys_for_partition(self, partition, graph_mapper):
-        return len(self._drnl_vertices)
 
     def read_samples(self, buffer_manager):
         """ Read back the samples

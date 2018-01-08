@@ -83,6 +83,7 @@ class MCackVertex(
     def get_acknowledge_key(self, placement, routing_info):
         key = routing_info.get_first_key_from_pre_vertex(
             placement.vertex, self._acknowledge_partition_name)
+
         return key
 
     @property
@@ -182,11 +183,17 @@ class MCackVertex(
 
         # Write the child key
         if len(keys)>0:
-            spec.write_value(routing_info.get_routing_info_from_pre_vertex(
-                self, self._command_partition_name).first_key, data_type=DataType.UINT32)
+            command_key = routing_info.get_first_key_from_pre_vertex(
+                self, self._command_partition_name)
+            spec.write_value(command_key, data_type=DataType.UINT32)
+            #spec.write_value(routing_info.get_routing_info_from_pre_vertex(
+            #    self, self._command_partition_name).first_key, data_type=DataType.UINT32)
             #print "DRNL routing key:{}\n".format(routing_info.first_key)
         else:
-            spec.write_value(0, data_type=DataType.UINT32)
+            #spec.write_value(0, data_type=DataType.UINT32)
+            raise Exception("no mack key generated!")
+
+
 
         # Write number of child nodes
         spec.write_value(
@@ -195,6 +202,3 @@ class MCackVertex(
         # End the specification
         spec.end_specification()
 
-  #  @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
-  #  def get_n_keys_for_partition(self, partition, graph_mapper):
-  #      return len(self._ihcan_vertices)

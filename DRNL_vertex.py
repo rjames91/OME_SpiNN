@@ -34,7 +34,7 @@ from spinn_front_end_common.interface.profiling.abstract_has_profile_data \
     import AbstractHasProfileData
 from spinn_front_end_common.interface.profiling import profile_utils
 
-
+profile = True
 class DRNLVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
@@ -108,6 +108,10 @@ class DRNLVertex(
     def get_acknowledge_key(self, placement, routing_info):
         key = routing_info.get_first_key_from_pre_vertex(
             placement.vertex, self._acknowledge_partition_name)
+        if key == 0:
+            print "0 key"
+        #    raise Exception("0 value key detected!")
+        #else:
         return key
 
     @property
@@ -152,7 +156,8 @@ class DRNLVertex(
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES + self._data_size
         sdram += len(self._ihcan_vertices) * self._KEY_ELEMENT_TYPE.size
-        sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
+        if profile:
+            sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 
         resources = ResourceContainer(
             dtcm=DTCMResource(0),
@@ -173,11 +178,12 @@ class DRNLVertex(
     def get_n_keys_for_partition(self, partition, graph_mapper):
         return 4#2  # two for control IDs
 
-    @overrides(AbstractHasProfileData.get_profile_data)
-    def get_profile_data(self, transceiver, placement):
-        return profile_utils.get_profiling_data(
-            1,
-            self.PROFILE_TAG_LABELS, transceiver, placement)
+    if profile:
+        @overrides(AbstractHasProfileData.get_profile_data)
+        def get_profile_data(self, transceiver, placement):
+            return profile_utils.get_profiling_data(
+                1,
+                self.PROFILE_TAG_LABELS, transceiver, placement)
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
@@ -197,10 +203,11 @@ class DRNLVertex(
         region_size = self._N_PARAMETER_BYTES
         region_size += (1 + len(self._ihcan_vertices)) * self._KEY_ELEMENT_TYPE.size
         spec.reserve_memory_region(0, region_size)
-        #reserve profile region
-        profile_utils.reserve_profile_region(
-            spec, 1,
-            self._n_profile_samples)
+        if profile:
+            #reserve profile region
+            profile_utils.reserve_profile_region(
+                spec, 1,
+                self._n_profile_samples)
 
         spec.switch_write_focus(0)
 
@@ -240,11 +247,21 @@ class DRNLVertex(
 
         # Write the key
         if len(keys)>0:
-            spec.write_value(routing_info.get_routing_info_from_pre_vertex(
-                self, self._data_partition_name).first_key, data_type=DataType.UINT32)
+            #spec.write_value(routing_info.get_routing_info_from_pre_vertex(
+            #    self, self._data_partition_name).first_key, data_type=DataType.UINT32)
             #print "DRNL routing key:{}\n".format(routing_info.first_key)
+            data_key_orig = routing_info.get_routing_info_from_pre_vertex(
+                self, self._data_partition_name).first_key
+            data_key = routing_info.get_first_key_from_pre_vertex(
+                self, self._data_partition_name)
+            if data_key==0:
+                print
+                #raise Exception("0 value key detected!")
+            #else:
+            spec.write_value(data_key, data_type=DataType.UINT32)
         else:
-            spec.write_value(0, data_type=DataType.UINT32)
+            raise Exception("no drnl key generated!")
+            #spec.write_value(0, data_type=DataType.UINT32)
 
         # Write number of ihcans
         spec.write_value(
@@ -261,16 +278,13 @@ class DRNLVertex(
 
     #    print "DRNL OME placement=",OME_placement
    #     print "DRNL placement=",placement.p
-        profile_utils.write_profile_region_data(
-            spec, 1,
-            self._n_profile_samples)
+        if profile:
+            profile_utils.write_profile_region_data(
+                spec, 1,
+                self._n_profile_samples)
 
         # End the specification
         spec.end_specification()
-
-  #  @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
-  #  def get_n_keys_for_partition(self, partition, graph_mapper):
-  #      return len(self._ihcan_vertices)
 
     def read_samples(self, buffer_manager):
         """ Read back the samples

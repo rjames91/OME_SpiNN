@@ -21,7 +21,7 @@
 
 #define SEGSIZE 96//100
 
-#define SAMPLING_FREQUENCY 44100.f
+//#define SAMPLING_FREQUENCY 44100.f
 
 #define MAX_SIGNAL_S 1
 
@@ -39,7 +39,7 @@
 typedef union
 {
 	uint32_t u;
-	float f;
+	REAL f;
 } uint_float_union;
 
 

@@ -91,7 +91,7 @@ void sync_check(uint mc_key, uint null)
             //send acknowledgement to parent node
 //            while (!spin1_send_mc_packet(parent_key+1, 0, NO_PAYLOAD)) {
             while (!spin1_send_mc_packet(parent_key|2, 0, NO_PAYLOAD)) {
-            spin1_delay_us(1);
+                spin1_delay_us(1);
             }
             //first wave of acks
             if(!final_ack)
