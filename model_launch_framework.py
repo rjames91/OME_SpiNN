@@ -29,7 +29,8 @@ def calculate_additional_chips(num_rows,num_macks):
 
 def run_model(
         data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,
-        fs=44100,resample_factor=1,num_macks=4,seg_size=96,bitfield=True):
+        fs=44100,resample_factor=1,num_macks=4,seg_size=96,bitfield=True,
+        rt=True,profile=True):
     """ Executes an MCMC model, returning the received samples
 
     :param data: The audio input data
@@ -48,14 +49,7 @@ def run_model(
 
     # Get the number of cores available for use
     machine = g.machine()
-
-    # Create a OME for each chip
-    #omes = dict()
-    #drnls = dict()
-    #ihcans = dict()
     boards = dict()
-
-
     #changed to lists to ensure data is read back in the same order that verticies are instantiated
     omes=list()
     drnls=list()
@@ -68,16 +62,14 @@ def run_model(
     random_range = numpy.arange(n_ihcans*4,dtype=numpy.uint32)
     seeds = numpy.random.choice(random_range,n_ihcans*4,replace=False)
     seed_index = 0
-
     cf_index = 0
     count = 0
 
     #OME is on ethernet chip for live streaming
     for chip in machine.ethernet_connected_chips:
         # create OME
-        ome = OMEVertex(data, fs, len(pole_freqs))
+        ome = OMEVertex(data, fs, len(pole_freqs),rt=rt)
         g.add_machine_vertex_instance(ome)
-
         # constrain placement to local chip
         ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
         # omes[chip.x, chip.y] = ome
@@ -103,7 +95,8 @@ def run_model(
 
                 for j in range(n_ihcan):
                     ihcan = IHCANVertex(drnl,resample_factor,
-                                        seeds[seed_index:seed_index+4],bitfield=bitfield)
+                                        seeds[seed_index:seed_index+4],
+                                        bitfield=bitfield,profile=profile)
                     seed_index += 4
                     g.add_machine_vertex_instance(ihcan)
                     # constrain placement to local chip
@@ -208,7 +201,11 @@ def run_model(
         raise ValueError('failed to setup MC ack tree structure')
 
 # Run the simulation
-    #duration = (len(data)/fs) * 1000.
+    if rt:
+        latency = 3 * (96./fs)
+        duration = (len(data)/fs) * 1000.
+    else:
+        duration = 2000.
     #g.run(duration)
     g.run_until_complete()
 

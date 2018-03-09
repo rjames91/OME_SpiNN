@@ -2,6 +2,7 @@
 /application_generated_data_files
 *.csv
 *.bin
+*.npy
 .idea
 
 

@@ -6,9 +6,11 @@ import math
 from vision.spike_tools.vis.vis_tools import plot_output_spikes
 from signal_prep import *
 
-Fs = 22050.#44100.#40000.#100000.#
+Fs = 44100.#34000.#24000.#100000.#22050.#24000.#40000.#
 seg_size = 96
 bitfield = True
+profile = True
+resample_factor = 1.
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_22k",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_44k",dtype='float32')
@@ -17,15 +19,21 @@ bitfield = True
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1vowels_22k",dtype='float32')
 #audio_data = wavfile.read('./vowels_44_1kHz.wav')
 #audio_data = numpy.float32(audio_data[1])
-audio_data = generate_signal(freq=6900,dBSPL=68.,duration=0.4,
-                             modulation_freq=0.,fs=Fs,ramp_duration=0.01,plt=plt)
+#audio_data=numpy.fromfile("/home/rjames/Dropbox (The University of Manchester)/EarProject/map_sig",
+#                          dtype='float64')
 
-#audio_data = generate_signal(signal_type="sweep_tone",freq=[30,8000],dBSPL=50.,duration=0.1,
-#                             modulation_freq=0.,fs=Fs,ramp_duration=0.01,plt=plt)
-#audio_data = numpy.concatenate((audio_data,audio_data))
+#audio_data = generate_signal(freq=1000,dBSPL=20.,duration=0.5,
+#                             modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True)
 
-#audio_data = generate_signal(signal_type='file',dBSPL=50.,fs=Fs,ramp_duration=0.01,
-#                             file_name='./vowels_44_1kHz.wav',plt=plt)
+#audio_data = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=50., duration=0.5,
+#                             modulation_freq=0., fs=Fs, ramp_duration=0.0025, plt=None, silence=True)
+#audio_data = numpy.concatenate((audio_data,audio_data,audio_data))
+
+audio_data = generate_signal(signal_type='file',dBSPL=40.,fs=Fs,ramp_duration=0.01,
+                             file_name='./yes.wav',plt=None)
+audio_data = audio_data[11800:36500]
+
+#plt.show()
 
 #numpy.save('../Brainstem/audio_data.npy',audio_data)
 #concha = test_filter(audio_data,0.1783,0,-0.1783,1,-1.3477,0.6433)
@@ -33,11 +41,18 @@ audio_data = generate_signal(freq=6900,dBSPL=68.,duration=0.4,
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
 #pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs_125",dtype='float32')
 
-#pole_freqs = numpy.logspace(2,3.95,1000)
-#pole_freqs=[457, 6900]
-#pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs",dtype='float32')
-pole_freqs=numpy.empty(71)#TODO:investigate intermitent simulation failures
-pole_freqs.fill(6900.0)
+if Fs > 34000.:
+    pole_freqs = numpy.logspace(1.477,4.25,100)#full hearing spectrum
+    rt = False
+else:
+    pole_freqs = numpy.logspace(1.477,3.95,8)#up to 9k range
+    rt= True
+   # rt = False
+
+#pole_freqs=numpy.empty(8)
+#pole_freqs.fill(9000)
+#pole_freqs[0:4]=1000
+#pole_freqs[4:10]=9000
 #pole_freqs=numpy.empty(16)
 #pole_freqs.fill(4000.0)
 #pole_freqs=[30, 500, 1000, 2000, 3000, 4000, 5000, 6000, 7000]
@@ -56,12 +71,13 @@ audio_data = audio_data[0:int(numpy.floor(len(audio_data)/seg_size)*seg_size)]
 #plt.plot(audio_data)
 #plt.show
 
+
 #create framework of connected model vertices and run
 samples = model_launch_framework.run_model(
     audio_data, n_chips=numpy.ceil(len(pole_freqs)/2),n_drnl=2,
-    pole_freqs=pole_freqs,n_ihcan=5,fs=Fs,resample_factor=1,num_macks=4,
-    bitfield=bitfield)
-#numpy.save("./samples.npy",samples)
+    pole_freqs=pole_freqs,n_ihcan=5,fs=Fs,resample_factor=resample_factor,num_macks=4,
+    bitfield=bitfield,rt=rt,profile=profile)
+numpy.save("./samples.npy",samples)
 
 #samples=numpy.load("./samples.npy")
 
@@ -83,8 +99,8 @@ for ihc in ihc_output:
     if bitfield:
         #find non zero indicies for fibre and record in spike trains list
         idxs = numpy.nonzero(HSR)
-        if len(idxs[0]) == 0:
-            print "spike_index {} from ihc{} did not record in full, re-simulate this particular channel".format(spike_index,ihc_index)
+        #if len(idxs[0]) == 0:
+            #print "spike_index {} from ihc{} did not record in full, re-simulate this particular channel".format(spike_index,ihc_index)
         for i in idxs[0]:
             spike_trains.append((spike_index, i))
 
@@ -98,8 +114,8 @@ for ihc in ihc_output:
     if bitfield:
         # find non zero indicies for fibre and record in spike trains list
         idxs = numpy.nonzero(LSR)
-        if len(idxs[0])==0:
-            print "spike_index {} from ihc{} did not record in full, re-simulate this particular channel".format(spike_index,ihc_index)
+        #if len(idxs[0])==0:
+            #print "spike_index {} from ihc{} did not record in full, re-simulate this particular channel".format(spike_index,ihc_index)
         for i in idxs[0]:
             spike_trains.append((spike_index, i))
     # increment spike_index
@@ -109,6 +125,7 @@ for ihc in ihc_output:
 
 if bitfield:
     #spike_trains=numpy.load("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_kate_a_10kfib.npy")
+    #[spike_trains,scale_factor]=numpy.load("./spike_trains.npy")
     duration = len(audio_data)/Fs
     spike_times = [spike_time for (neuron_id, spike_time) in spike_trains]
     scale_factor = duration/numpy.max(spike_times)
@@ -147,14 +164,18 @@ if bitfield:
 else:
     plt.figure()
     drnl_time = numpy.linspace(0,len(audio_data)/Fs,len(audio_data))
-    plt.plot(drnl_time,drnl.T)
-    plt.xlim((0,len(audio_data)/Fs))
+   # plt.plot(drnl_time,drnl.T)
+    plt.plot(drnl[1][:])
+  #  plt.xlim((0,len(audio_data)/Fs))
+    print "max_lsr={}".format(numpy.max(drnl[0][:]))
+    print "max_hsr={}".format(numpy.max(drnl[1][:]))
 
 print "total stimulus time=",(len(audio_data)/Fs)
 plt.show()
 
 # Save the results
-#numpy.save("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_6k_640fib_50dB.npy", spike_trains)
+numpy.save("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains.npy", spike_trains)
 #numpy.savetxt("./results.csv",drnl, fmt="%e", delimiter=",")
-#numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", samples, fmt="%f", delimiter=",")
+#numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", drnl[1][:], fmt="%.38e", delimiter=",")
+#numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", audio_data, fmt="%.38e", delimiter=",")
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/complete.txt",[1],fmt="%f")

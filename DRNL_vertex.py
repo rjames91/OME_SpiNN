@@ -34,7 +34,6 @@ from spinn_front_end_common.interface.profiling.abstract_has_profile_data \
     import AbstractHasProfileData
 from spinn_front_end_common.interface.profiling import profile_utils
 
-profile = True
 class DRNLVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
@@ -63,7 +62,7 @@ class DRNLVertex(
         3: "PROCESS_FIXED_SYNAPSES",
         4: "PROCESS_PLASTIC_SYNAPSES"}
 
-    def __init__(self, ome,CF,delay,data_partition_name="DRNLData",
+    def __init__(self, ome,CF,delay,profile=True,data_partition_name="DRNLData",
             acknowledge_partition_name="DRNLDataAck"):
         """
 
@@ -96,6 +95,7 @@ class DRNLVertex(
         self._acknowledge_partition_name = acknowledge_partition_name
 
         # Set up for profiling
+        self._profile = profile
         self._n_profile_samples = 10000
 
     def register_processor(self, ihcan_vertex):
@@ -156,7 +156,7 @@ class DRNLVertex(
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES + self._data_size
         sdram += len(self._ihcan_vertices) * self._KEY_ELEMENT_TYPE.size
-        if profile:
+        if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 
         resources = ResourceContainer(
@@ -178,12 +178,11 @@ class DRNLVertex(
     def get_n_keys_for_partition(self, partition, graph_mapper):
         return 4#2  # two for control IDs
 
-    if profile:
-        @overrides(AbstractHasProfileData.get_profile_data)
-        def get_profile_data(self, transceiver, placement):
-            return profile_utils.get_profiling_data(
-                1,
-                self.PROFILE_TAG_LABELS, transceiver, placement)
+    @overrides(AbstractHasProfileData.get_profile_data)
+    def get_profile_data(self, transceiver, placement):
+        return profile_utils.get_profiling_data(
+            1,
+            self.PROFILE_TAG_LABELS, transceiver, placement)
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
@@ -203,7 +202,7 @@ class DRNLVertex(
         region_size = self._N_PARAMETER_BYTES
         region_size += (1 + len(self._ihcan_vertices)) * self._KEY_ELEMENT_TYPE.size
         spec.reserve_memory_region(0, region_size)
-        if profile:
+        if self._profile:
             #reserve profile region
             profile_utils.reserve_profile_region(
                 spec, 1,
@@ -278,7 +277,7 @@ class DRNLVertex(
 
     #    print "DRNL OME placement=",OME_placement
    #     print "DRNL placement=",placement.p
-        if profile:
+        if self._profile:
             profile_utils.write_profile_region_data(
                 spec, 1,
                 self._n_profile_samples)

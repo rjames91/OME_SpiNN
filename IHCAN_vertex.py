@@ -34,9 +34,6 @@ from spinn_front_end_common.interface.simulation import simulation_utilities
 from enum import Enum
 import numpy
 
-profile = True
-
-
 class IHCANVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
@@ -46,7 +43,7 @@ class IHCANVertex(
     """ A vertex that runs the DRNL algorithm
     """
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 11*4#7*4
+    _N_PARAMETER_BYTES = 10*4#7*4
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
@@ -72,7 +69,7 @@ class IHCANVertex(
                ('RECORDING', 2),
                ('PROFILE', 3)])
 
-    def __init__(self, drnl,resample_factor,seed,bitfield=True):#TODO:add Fs to params
+    def __init__(self, drnl,resample_factor,seed,bitfield=True,profile=True):#TODO:add Fs to params
         """
         :param ome: The connected ome vertex    """
         MachineVertex.__init__(self, label="IHCAN Node", constraints=None)
@@ -95,6 +92,7 @@ class IHCANVertex(
         # Set up for profiling
         self._n_profile_samples = 10000
         self._bitfield = bitfield
+        self._profile = profile
 
     def _get_model_parameters_array(self):
         parameters = self._model.get_parameters()
@@ -121,7 +119,7 @@ class IHCANVertex(
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES + self._data_size
         sdram += 1 * self._KEY_ELEMENT_TYPE.size
-        if profile:
+        if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 
         resources = ResourceContainer(
@@ -142,12 +140,12 @@ class IHCANVertex(
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
         return 4#2  # 2 for control IDs
-    if profile:
-        @overrides(AbstractHasProfileData.get_profile_data)
-        def get_profile_data(self, transceiver, placement):
-            return profile_utils.get_profiling_data(
-                self.REGIONS.PROFILE.value,
-                self.PROFILE_TAG_LABELS, transceiver, placement)
+
+    @overrides(AbstractHasProfileData.get_profile_data)
+    def get_profile_data(self, transceiver, placement):
+        return profile_utils.get_profiling_data(
+            self.REGIONS.PROFILE.value,
+            self.PROFILE_TAG_LABELS, transceiver, placement)
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
@@ -177,7 +175,7 @@ class IHCANVertex(
         spec.reserve_memory_region(
             self.REGIONS.RECORDING.value,
             recording_utilities.get_recording_header_size(1))
-        if profile:
+        if self._profile:
             #reserve profile region
             profile_utils.reserve_profile_region(
                 spec, self.REGIONS.PROFILE.value,
@@ -236,7 +234,7 @@ class IHCANVertex(
 #        print "IHCAN DRNL placement=",DRNL_placement
         #print "IHCAN placement=",placement.p
         #Write profile regions
-        if profile:
+        if self._profile:
             profile_utils.write_profile_region_data(
                 spec, self.REGIONS.PROFILE.value,
                 self._n_profile_samples)
@@ -265,6 +263,12 @@ class IHCANVertex(
         #check all expected data has been recorded
         if len(output_data) != self._num_data_points:
             #if not set output to zeros of correct length, this will cause an error flag in run_ear.py
+            #raise Warning
+            print("recording not complete, reduce Fs or disable RT!\n"
+                            "recorded output length:{}, expected length:{} "
+                            "at placement:{},{},{}".format(len(output_data),
+                            self._num_data_points,placement.x,placement.y,placement.p))
+
             output_data = numpy.zeros(self._num_data_points)
            # print("error: output data too small")
 

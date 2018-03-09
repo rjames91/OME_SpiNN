@@ -84,7 +84,7 @@ void sync_check(uint mc_key, uint null)
     if (command==2)//ack received from child
     {
         sync_count++;
-        log_info("ack mcpacket recieved from key=%d sync_count=%d",mc_key,sync_count);
+        log_info("ack mcpacket recieved from key=%d sync_count=%d",mc_key-2,sync_count);
 
         if(sync_count>=num_children)
         {

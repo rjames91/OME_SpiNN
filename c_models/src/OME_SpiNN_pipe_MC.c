@@ -21,10 +21,8 @@
 #include <data_specification.h>
 #include <profiler.h>
 #include <profile_tags.h>
-//#define TOTAL_TICKS 62//240//173//197
+
 #define PROFILE
-//#define LOOP_PROFILE
-//#define PRINT
 
 //=========GLOBAL VARIABLES============//
 REAL Fs,dt,max_rate;
@@ -48,9 +46,14 @@ uint_float_union MC_union;
 REAL conchaL,conchaH,conchaG,earCanalL,earCanalH,earCanalG,stapesH,stapesL,stapesScalar,
 	ARtau,ARdelay,ARrateThreshold,rateToAttenuationFactor,BFlength;
 
-REAL concha_q,concha_j,concha_k,concha_l,conchaGainScalar,recip_conchaFilter_a0,
+double concha_q,concha_j,concha_k,concha_l;
+
+REAL conchaGainScalar,recip_conchaFilter_a0,
 	earCanal_q,earCanal_j,earCanal_k,earCanal_l,earCanalGainScalar,recip_earCanalFilter_a0,
 	ARatt,Wn,stapesHP_order,sf,stapesLP_b,stapes_tau,past_stapesDisp;
+/*REAL concha_q,concha_j,concha_k,concha_l,conchaGainScalar,recip_conchaFilter_a0,
+	earCanal_q,earCanal_j,earCanal_k,earCanal_l,earCanalGainScalar,recip_earCanalFilter_a0,
+	ARatt,Wn,stapesHP_order,sf,stapesLP_b,stapes_tau,past_stapesDisp;*/
 
 REAL conchaFilter_b[3],conchaFilter_a[3],earCanalFilter_b[3],earCanalFilter_a[3],stapesHP_b[3],stapesHP_a[3],stapesLP_a[2],past_input[2],past_concha[2],past_earCanalInput[2],past_earCanal[2],past_stapesInput[2]
 ,past_stapes[2];
@@ -90,6 +93,7 @@ enum params_enum {
     NUM_BFS,
     KEY,
     R2S_KEY,
+    RT,
     SHB1,
     SHB2,
     SHB3,
@@ -108,6 +112,7 @@ struct parameters {
     uint NUM_BFS;
     uint KEY;
     uint R2S_KEY;
+    uint RT;
     REAL SHB1;
     REAL SHB2;
     REAL SHB3;
@@ -132,6 +137,8 @@ uint placement_coreID;
 uint key;
 
 uint r2s_key;
+
+uint rt;
 
 uint num_drnls;
 
@@ -167,7 +174,8 @@ void app_init(void)
     log_info("TOTAL_TICKS=%d",TOTAL_TICKS);
 
     // Get a pointer to the data - not worth copying at present
-    sdramin_buffer = (REAL *) &(params_enum[DATA]);//(REAL *) &params.DATA;//
+    //sdramin_buffer = (REAL *) &(params_enum[DATA]);//(REAL *) &params.DATA;//
+    sdramin_buffer = (REAL *) &(params_enum[DATA+7]);//to account for double types
     log_info("sdramin_buffer=0x%08x",(uint)sdramin_buffer);
     //obtain this core ID from the host placement perspective
     placement_coreID = params.COREID;//params_enum[COREID];//
@@ -178,6 +186,9 @@ void app_init(void)
 
     r2s_key=params.R2S_KEY;//params[R2S_KEY];//
     log_info("r2s key=%d",r2s_key);
+
+    rt=params.RT;
+    log_info("rt=%d",rt);
 
     //Get number of child DRNL vertices
     num_drnls=params.NUM_DRNL;//params[NUM_DRNL];//
@@ -195,9 +206,9 @@ void app_init(void)
     //real-time timer period calculation (us)
     //if(Fs<=22050.0f)TIMER_TICK_PERIOD = (uint)(0.95*1e6 * ((REAL)SEGSIZE/Fs));//RT
     //else TIMER_TICK_PERIOD = 5000;//Not RT
-   // TIMER_TICK_PERIOD = (uint)(0.95*1e6 * ((REAL)SEGSIZE/Fs));//RT
-    TIMER_TICK_PERIOD = (uint)((1e6 * ((REAL)SEGSIZE/Fs))+0.5);//RT
-    //TIMER_TICK_PERIOD = 5000;//Not RT
+    //TIMER_TICK_PERIOD = (uint)(0.95*1e6 * ((REAL)SEGSIZE/Fs));//RT
+    if(rt)TIMER_TICK_PERIOD = (uint)(1e6 * ((REAL)SEGSIZE/Fs));//RT
+    else TIMER_TICK_PERIOD = 6000;//Not RT
      //TIMER_TICK_PERIOD = (uint)(0.8*1e6 * ((REAL)SEGSIZE/Fs));//RT
     //TODO: need to reconsider the running speed needed for total RT performance as the MC TX overhead is large
     //TIMER_TICK_PERIOD = (uint)(1e6 * ((REAL)SEGSIZE/48000.0));//top speed
@@ -270,9 +281,9 @@ void app_init(void)
 	ARrateThreshold=100.0;
 	rateToAttenuationFactor=0.1/BFlength;
 
-	concha_q= (REAL)PI * dt * (conchaH - conchaL);
+	concha_q= (double)M_PI * (double)dt * (double)(conchaH - conchaL);
 	concha_j= 1.0/(1.0+ (1.0/tan(concha_q)));
-	concha_k= (2.0 * cos((REAL)PI * dt * (conchaH + conchaL)))
+	concha_k= (2.0 * cos((double)M_PI * (double)dt * (double)(conchaH + conchaL)))
 	            / ((1.0 + tan(concha_q)) * cos(concha_q));
 	concha_l= (tan(concha_q) - 1.0)/(tan(concha_q) + 1.0);
 	conchaGainScalar=pow(10.0,conchaG/20.0);
@@ -285,9 +296,9 @@ void app_init(void)
 	conchaFilter_a[2]=-1.0*concha_l;
 	recip_conchaFilter_a0=1.0/conchaFilter_a[0];
 
-	earCanal_q= PI * dt * (earCanalH - earCanalL);
+	earCanal_q= M_PI * dt * (earCanalH - earCanalL);
 	earCanal_j= 1.0/(1.0+ (1.0/tan(earCanal_q)));
-	earCanal_k= (2.0 * cos(PI * dt * (earCanalH + earCanalL))) / ((1.0 + tan(earCanal_q)) * cos(earCanal_q));
+	earCanal_k= (2.0 * cos(M_PI * dt * (earCanalH + earCanalL))) / ((1.0 + tan(earCanal_q)) * cos(earCanal_q));
 	earCanal_l= (tan(earCanal_q) - 1.0)/(tan(earCanal_q) + 1.0);
 	earCanalGainScalar=pow(10.0,earCanalG/20.0);
 
@@ -307,14 +318,14 @@ void app_init(void)
 	stapesHP_a[1] = params.SHA2;//0;//-1.719434219286951;//-1.859167;
 	stapesHP_a[2] = params.SHA3;//0;//0.754215957500572;//0.868451;
 
-    /*log_info("shp_b0:%k",(accum)stapesHP_b[0]);
+    log_info("shp_b0:%k",(accum)stapesHP_b[0]);
     log_info("shp_b1:%k",(accum)stapesHP_b[1]);
     log_info("shp_b2:%k",(accum)stapesHP_b[2]);
 	log_info("shp_a0:%k",(accum)stapesHP_a[0]);
 	log_info("shp_a1:%k",(accum)stapesHP_a[1]);
-    log_info("shp_a2:%k",(accum)stapesHP_a[2]);  */
+    log_info("shp_a2:%k",(accum)stapesHP_a[2]);
 
-	stapes_tau= 1.0/ (2 * PI * stapesL);
+	stapes_tau= 1.0/ (2 * M_PI * stapesL);
 	stapesLP_a[0]= 1.0;
 	stapesLP_a[1]= dt/stapes_tau -1.0;
 	stapesLP_b= 1.0 + stapesLP_a[1];
@@ -477,7 +488,7 @@ void process_chan(REAL *in_buffer)
 	uint i,j,k;
 	uint si=0;
 	REAL concha,earCanalInput,earCanalRes,earCanalOutput,ARoutput,stapesVelocity,stapesDisplacement;
-		
+	REAL filter_1;
 #ifdef PRINT
 	io_printf (IO_BUF, "[core %d] segment %d (offset=%d) starting processing\n", coreID,seg_index,segment_offset);
 #endif
@@ -513,7 +524,17 @@ void process_chan(REAL *in_buffer)
 			- conchaFilter_a[1]*past_concha[0]
 			- conchaFilter_a[2]*past_concha[1]) * recip_conchaFilter_a0;
 
-        //if (ABS(concha) < 1e-14) concha = 0.0;//prevent small value calc performance drop
+        /*filter_1 = conchaFilter_b[0]*in_buffer[i]
+                    + conchaFilter_b[1]*past_input[0]
+                    + conchaFilter_b[2]*past_input[1];
+        concha = conchaFilter_a[0]*filter_1
+                    - conchaFilter_a[1]*past_concha[0]
+                    - conchaFilter_a[2]*past_concha[1];*/
+        //filter_3 = conchaFilter_b[2]*past_input[1]+filter_2;
+        //filter_4 = conchaFilter_a[1]*past_concha[0];
+        //filter_5 = filter_4 - conchaFilter_a[2]*past_concha[1];
+        //concha =   filter_5;
+
 		//update vars
 		past_input[1]=past_input[0];
 		past_input[0]=in_buffer[i];
@@ -521,17 +542,21 @@ void process_chan(REAL *in_buffer)
 		past_concha[1]=past_concha[0];
 		past_concha[0]=concha;
 
-		earCanalInput= conchaGainScalar* concha + in_buffer[i];
+		earCanalInput= conchaGainScalar * concha + in_buffer[i];
 
 		//ear canal
-		earCanalRes= (earCanalFilter_b[0]*earCanalInput
+		/*earCanalRes= (earCanalFilter_b[0]*earCanalInput
 				+ earCanalFilter_b[1]*past_earCanalInput[0]
 				+ earCanalFilter_b[2]*past_earCanalInput[1]
 				- earCanalFilter_a[1]*past_earCanal[0]
-				- earCanalFilter_a[2]*past_earCanal[1]) * recip_earCanalFilter_a0;
-
-        //if (ABS(earCanalRes) < 1e-14) earCanalRes = 0.0;//prevent small value calc performance drop
-		//update vars	
+				- earCanalFilter_a[2]*past_earCanal[1]) * recip_earCanalFilter_a0;*/
+		filter_1 = earCanalFilter_b[0]*earCanalInput
+				    + earCanalFilter_b[1]*past_earCanalInput[0]
+				    + earCanalFilter_b[2]*past_earCanalInput[1];
+        earCanalRes = earCanalFilter_a[0] * filter_1
+                      - earCanalFilter_a[1]*past_earCanal[0]
+                      - earCanalFilter_a[2]*past_earCanal[1];
+		//update vars
 		past_earCanalInput[1]=past_earCanalInput[0];
 		past_earCanalInput[0]=earCanalInput;
 	
@@ -542,13 +567,18 @@ void process_chan(REAL *in_buffer)
 
 		//AR
 		ARoutput= ARatt * stapesScalar * earCanalOutput;
-
 		//stapes velocity
-		stapesVelocity= stapesHP_b[0] * ARoutput + 
+		/*stapesVelocity= stapesHP_b[0] * ARoutput +
 				stapesHP_b[1] * past_stapesInput[0] + 
 				stapesHP_b[2] * past_stapesInput[1] 
 				- stapesHP_a[1] * past_stapes[0]
-				- stapesHP_a[2] * past_stapes[1];
+				- stapesHP_a[2] * past_stapes[1];*/
+        filter_1 = stapesHP_b[0] * ARoutput +
+				    stapesHP_b[1] * past_stapesInput[0] +
+				    stapesHP_b[2] * past_stapesInput[1];
+        stapesVelocity = stapesHP_a[0] * filter_1
+                         - stapesHP_a[1] * past_stapes[0]
+				         - stapesHP_a[2] * past_stapes[1];
 		//update vars
 		past_stapesInput[1]= past_stapesInput[0];
 		past_stapesInput[0]= ARoutput;
@@ -557,14 +587,16 @@ void process_chan(REAL *in_buffer)
 		//if (ABS(stapesVelocity) < 1e-14) stapesVelocity = 0.0;//prevent small value calc performance drop
 
 		//stapes displacement
-		stapesDisplacement= stapesLP_b * stapesVelocity - stapesLP_a[1] * past_stapesDisp;
+		filter_1 = stapesLP_b * stapesVelocity;
+		stapesDisplacement = stapesLP_a[0] * filter_1 - stapesLP_a[1] * past_stapesDisp;
+		//stapesDisplacement= stapesLP_b * stapesVelocity - stapesLP_a[1] * past_stapesDisp;
 		//update vars
 		past_stapesDisp=stapesDisplacement;
         }
 
 		//if (ABS(stapesDisplacement) < 1e-14) stapesDisplacement = 0.0;//prevent small value calc performance drop
 		MC_union.f = stapesDisplacement;
-		//MC_union.f = earCanalRes;//in_buffer[i];//earCanalInput;//recip_conchaFilter_a0;//in_buffer[i];//
+		//MC_union.f = ARoutput;//earCanalOutput;//earCanalRes;//earCanalInput;//concha;//in_buffer[i];//stapesVelocity;//ARoutput;//recip_conchaFilter_a0;//
 
        // log_info("payload = %d",MC_union.u);
 		//save to buffer
@@ -636,7 +668,12 @@ void app_done ()
   profiler_write_entry_disable_irq_fiq(PROFILER_EXIT | PROFILER_DMA_READ);
   profiler_finalise();
 #endif
-
+	log_info("b0:%k",(accum)conchaFilter_b[0]);
+    log_info("b1:%k",(accum)conchaFilter_b[1]);
+    log_info("b2:%k",(accum)conchaFilter_b[2]);
+	log_info("a0:%k",(accum)conchaFilter_a[0]);
+	log_info("a1:%k",(accum)conchaFilter_a[1]);
+    log_info("a2:%k",(accum)conchaFilter_a[2]);
   // report simulation time
   io_printf (IO_BUF, "[core %d] simulation lasted %d ticks\n", coreID,
              spin1_get_simulation_time());
@@ -652,7 +689,7 @@ void app_done ()
   
   // say goodbye
   io_printf (IO_BUF, "[core %d] stopping simulation\n", coreID);
-  io_printf (IO_BUF, "[core %d] -------------------\n", coreID);
+  //io_printf (IO_BUF, "[core %d] -------------------\n", coreID);
 }
 
 void c_main()

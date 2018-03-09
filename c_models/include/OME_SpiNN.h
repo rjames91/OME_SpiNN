@@ -8,10 +8,10 @@
 #ifndef OME_SpiNN_H_
 #define OME_SpiNN_H_
 
-#define REAL float
-#define REAL_CONST(x) x##f
-#define REAL_MAX 1e38
-#define PI 3.14159265358979323846f
+#define REAL double //float
+#define REAL_CONST(x) x//x##f
+//#define REAL_MAX 1e38
+//#define PI 3.14159265358979323846f
 
 #define MAX_CHIPX 1//255
 #define MAX_CHIPY 1//255
@@ -39,7 +39,7 @@
 typedef union
 {
 	uint32_t u;
-	REAL f;
+	float f;
 } uint_float_union;
 
 
