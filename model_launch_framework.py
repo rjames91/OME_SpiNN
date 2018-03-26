@@ -57,10 +57,11 @@ def run_model(
     macks=list()
 
     delays =  numpy.round(len(pole_freqs)*numpy.random.rand(len(pole_freqs)))
-    #create unique seeds for IHCAN instances
-    n_ihcans = n_chips*n_drnl*n_ihcan
-    random_range = numpy.arange(n_ihcans*4,dtype=numpy.uint32)
-    seeds = numpy.random.choice(random_range,n_ihcans*4,replace=False)
+    if n_ihcan>0:
+        #create unique seeds for IHCAN instances
+        n_ihcans = n_chips*n_drnl*n_ihcan
+        random_range = numpy.arange(n_ihcans*4,dtype=numpy.uint32)
+        seeds = numpy.random.choice(random_range,n_ihcans*4,replace=False)
     seed_index = 0
     cf_index = 0
     count = 0

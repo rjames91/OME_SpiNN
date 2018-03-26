@@ -88,7 +88,7 @@ class DRNLVertex(
         )
 
         self._sdram_usage = (
-            self._N_PARAMETER_BYTES + self._data_size
+            self._N_PARAMETER_BYTES #+ self._data_size
         )
 
         self._data_partition_name = data_partition_name
@@ -154,7 +154,7 @@ class DRNLVertex(
     @property
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
-        sdram = self._N_PARAMETER_BYTES + self._data_size
+        sdram = self._N_PARAMETER_BYTES #+ self._data_size
         sdram += len(self._ihcan_vertices) * self._KEY_ELEMENT_TYPE.size
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
@@ -168,7 +168,7 @@ class DRNLVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
-        return "DRNL.aplx"
+        return "SpiNNakEar_DRNL.aplx"
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):

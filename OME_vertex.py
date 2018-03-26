@@ -32,6 +32,7 @@ from spinn_front_end_common.abstract_models\
 from enum import Enum
 import numpy
 import scipy.signal as sig
+from scipy.io import loadmat
 
 from spinn_machine.utilities.progress_bar import ProgressBar
 from spynnaker.pyNN.utilities import constants
@@ -108,7 +109,12 @@ class OMEVertex(
         )
         # calculate stapes hpf coefficients
         Wn = 1. / self._fs * 2. * 700.
-        [self._shb, self._sha] = sig.butter(2, Wn, 'high')
+        #[self._shb, self._sha] = sig.butter(2, Wn, 'high')
+        matlab_output = loadmat('./hpf_coeffs.mat')
+        sha = matlab_output['stapesHighPass_a'].tolist()
+        self._sha = numpy.asarray(sha[0])
+        shb = matlab_output['stapesHighPass_b'].tolist()
+        self._shb = numpy.asarray(shb[0])
 
         # Set up for profiling
         self._profile = profile
@@ -174,7 +180,7 @@ class OMEVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
-        return "OME.aplx"
+        return "SpiNNakEar_OME.aplx"
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):

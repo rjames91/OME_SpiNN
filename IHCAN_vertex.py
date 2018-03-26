@@ -80,14 +80,17 @@ class IHCANVertex(
         self._fs=drnl.fs
         self._num_data_points = 2 * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
        # self._recording_size = (self._num_data_points/self._resample_factor) * 4 * 1./32#numpy.ceil(self._num_data_points/32.0)#
-        self._recording_size = self._num_data_points * 4 #* 1./32#numpy.ceil(self._num_data_points/32.0)#
+        if bitfield:
+            self._recording_size = numpy.ceil((self._num_data_points * 4)/32.)
+        else:
+            self._recording_size = self._num_data_points * 4 #* 1./32#numpy.ceil(self._num_data_points/32.0)#
         self._seed = seed
         self._data_size = (
             self._num_data_points * self._DATA_ELEMENT_TYPE.size +
             self._DATA_COUNT_TYPE.size
         )
         self._sdram_usage = (
-            self._N_PARAMETER_BYTES + self._data_size
+            self._N_PARAMETER_BYTES #+ self._data_size
         )
         # Set up for profiling
         self._n_profile_samples = 10000
@@ -117,7 +120,7 @@ class IHCANVertex(
     @property
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
-        sdram = self._N_PARAMETER_BYTES + self._data_size
+        sdram = self._N_PARAMETER_BYTES #+ self._data_size
         sdram += 1 * self._KEY_ELEMENT_TYPE.size
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
@@ -131,7 +134,7 @@ class IHCANVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
-        return "IHC_AN_float_MAP.aplx"
+        return "SpiNNakEar_IHCAN.aplx"
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
@@ -276,8 +279,8 @@ class IHCANVertex(
         #return formatted_data
         return output_data
 
-    def get_minimum_buffer_sdram_usage(self):
-        return 1024
+    #def get_minimum_buffer_sdram_usage(self):
+    #    return 1024
 
     def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
         return recording_utilities.get_n_timesteps_in_buffer_space(

@@ -4,5 +4,7 @@
 *.bin
 *.npy
 .idea
-
-
+*_local
+*_samples
+*.wav
+*.pyc

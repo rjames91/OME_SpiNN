@@ -5,11 +5,13 @@ import pylab as plt
 import math
 from vision.spike_tools.vis.vis_tools import plot_output_spikes
 from signal_prep import *
+from scipy.io import savemat, loadmat
 
-Fs = 44100.#34000.#24000.#100000.#22050.#24000.#40000.#
+
+Fs = 100000.#22050.#44100.#34000.#24000.#24000.#40000.#
 seg_size = 96
-bitfield = True
-profile = True
+bitfield = True#False#
+profile = False#True
 resample_factor = 1.
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_22k",dtype='float32')
@@ -22,19 +24,32 @@ resample_factor = 1.
 #audio_data=numpy.fromfile("/home/rjames/Dropbox (The University of Manchester)/EarProject/map_sig",
 #                          dtype='float64')
 
-#audio_data = generate_signal(freq=1000,dBSPL=20.,duration=0.5,
-#                             modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True)
+audio_data = generate_signal(freq=1000,dBSPL=20.,duration=0.05,
+                             modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True,silence_duration=0.05)
+#audio_data = numpy.concatenate((audio_data,audio_data,audio_data))
+
+# matlab = loadmat("/home/rjames/Dropbox (The University of Manchester)/EarProject/MAP_BS/map_64.mat")
+#
+# audio_data = matlab["map_output"][0]
+#
+# mat  =loadmat("/home/rjames/Dropbox (The University of Manchester)/EarProject/MAP_BS/map_cdispl.mat")
+# audio_data = mat["map_output"][0]
+
+"""[fs, raw_audio]= wavfile.read('./no_samples/0bde966a_nohash_1.wav')
+plt.figure()
+plt.plot(raw_audio)
+plt.show()
+cut_audio= raw_audio[0:8000]
+wavfile.write('./no_samples/no_edit10.wav',fs,cut_audio)"""
 
 #audio_data = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=50., duration=0.5,
 #                             modulation_freq=0., fs=Fs, ramp_duration=0.0025, plt=None, silence=True)
 #audio_data = numpy.concatenate((audio_data,audio_data,audio_data))
 
-audio_data = generate_signal(signal_type='file',dBSPL=40.,fs=Fs,ramp_duration=0.01,
-                             file_name='./yes.wav',plt=None)
-audio_data = audio_data[11800:36500]
+#audio_data = generate_signal(signal_type='file',dBSPL=40.,fs=Fs,ramp_duration=0.01,silence=True,silence_duration=0.1,
+#                             file_name='./10speakers_2numbers_5repeats.wav',plt=None)#10speakers_2numbers_5repeats.wav
 
 #plt.show()
-
 #numpy.save('../Brainstem/audio_data.npy',audio_data)
 #concha = test_filter(audio_data,0.1783,0,-0.1783,1,-1.3477,0.6433)
 #numpy.savetxt("./concha.csv",concha, fmt="%e", delimiter=",")
@@ -42,10 +57,10 @@ audio_data = audio_data[11800:36500]
 #pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs_125",dtype='float32')
 
 if Fs > 34000.:
-    pole_freqs = numpy.logspace(1.477,4.25,100)#full hearing spectrum
+    pole_freqs = numpy.logspace(1.477,4.25,3000)#full hearing spectrum
     rt = False
 else:
-    pole_freqs = numpy.logspace(1.477,3.95,8)#up to 9k range
+    pole_freqs = numpy.logspace(1.477,3.95,100)#up to 9k range
     rt= True
    # rt = False
 
@@ -56,7 +71,7 @@ else:
 #pole_freqs=numpy.empty(16)
 #pole_freqs.fill(4000.0)
 #pole_freqs=[30, 500, 1000, 2000, 3000, 4000, 5000, 6000, 7000]
-#pole_freqs=[4000,4000]
+#pole_freqs=[1000,1000]
 #plt.figure()
 #plt.plot(audio_data[12000:15000])#[12000:20500])
 #
@@ -70,14 +85,20 @@ audio_data = audio_data[0:int(numpy.floor(len(audio_data)/seg_size)*seg_size)]
 #plt.figure()
 #plt.plot(audio_data)
 #plt.show
+last_non_zero = numpy.nonzero(audio_data)[0].max()
+print "audio sample {}:{:.100e}".format(last_non_zero,audio_data[last_non_zero].astype(numpy.float32))
 
+
+# plt.figure()
+# plt.plot(audio_data)
+#plt.show()
 
 #create framework of connected model vertices and run
 samples = model_launch_framework.run_model(
     audio_data, n_chips=numpy.ceil(len(pole_freqs)/2),n_drnl=2,
     pole_freqs=pole_freqs,n_ihcan=5,fs=Fs,resample_factor=resample_factor,num_macks=4,
     bitfield=bitfield,rt=rt,profile=profile)
-numpy.save("./samples.npy",samples)
+#numpy.save("./samples.npy",samples)
 
 #samples=numpy.load("./samples.npy")
 
@@ -90,7 +111,7 @@ ihc_index=0
 #obtain list of IHCAN outputs
 ihc_output = [samples[x:x+2*int(numpy.floor(len(audio_data)/seg_size))*seg_size]
               for x in xrange(0, len(samples), 2*int(numpy.floor(len(audio_data)/seg_size))*seg_size)]
-drnl=numpy.zeros((len(pole_freqs)*10,int(numpy.floor(len(audio_data)/seg_size))*seg_size))
+drnl=numpy.zeros((len(pole_freqs)*10,int(numpy.floor(len(audio_data)/seg_size))*seg_size),dtype=numpy.float32)
 for ihc in ihc_output:
     #obtain fibre response
     hsr = [ihc[x:x+seg_size] for x in xrange(0,len(ihc),seg_size*2)]
@@ -166,6 +187,11 @@ else:
     drnl_time = numpy.linspace(0,len(audio_data)/Fs,len(audio_data))
    # plt.plot(drnl_time,drnl.T)
     plt.plot(drnl[1][:])
+    #plt.ylim((-0.5e-7,0.5e-7))
+
+    #plt.figure()
+    #plt.plot(drnl[-1][:])
+    #plt.ylim((-0.5e-7,0.5e-7))
   #  plt.xlim((0,len(audio_data)/Fs))
     print "max_lsr={}".format(numpy.max(drnl[0][:]))
     print "max_hsr={}".format(numpy.max(drnl[1][:]))
@@ -173,9 +199,16 @@ else:
 print "total stimulus time=",(len(audio_data)/Fs)
 plt.show()
 
+#print "audio_data[9998]{:.100e}".format(audio_data[9998])
+#print "single audio_data[9998]{:.100e}".format(numpy.float32(audio_data[9998]))
+
 # Save the results
-numpy.save("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains.npy", spike_trains)
+numpy.save("./results.npy",drnl[1][:])
+#savemat("/home/rjames/Dropbox (The University of Manchester)/EarProject/MAP_BS/MAP/results.mat",mdict={'spinn':drnl[1][:]},long_field_names=True)
+#numpy.save("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_no5.npy", [spike_trains,duration,Fs])
+#numpy.save("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_10sp_2num_5rep.npy", [spike_trains,duration,Fs])
 #numpy.savetxt("./results.csv",drnl, fmt="%e", delimiter=",")
-#numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", drnl[1][:], fmt="%.38e", delimiter=",")
+
+#numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", drnl[1][:], fmt="%.1000e", delimiter=",")
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", audio_data, fmt="%.38e", delimiter=",")
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/complete.txt",[1],fmt="%f")
