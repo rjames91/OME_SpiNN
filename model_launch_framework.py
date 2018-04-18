@@ -68,7 +68,6 @@ def run_model(
         g.add_machine_vertex_instance(ome)
         # constrain placement to local chip
         ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-        # omes[chip.x, chip.y] = ome
         omes.append(ome)
         boards[chip.x, chip.y] = chip.ip_address
         break
@@ -85,7 +84,6 @@ def run_model(
                 g.add_machine_vertex_instance(drnl)
                 # constrain placement to local chip
                 drnl.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-               #drnls[chip.x, chip.y,i] = drnl
                 drnls.append(drnl)
                 cf_index=cf_index+1
 
@@ -97,7 +95,6 @@ def run_model(
                     g.add_machine_vertex_instance(ihcan)
                     # constrain placement to local chip
                     ihcan.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-                    #ihcans[chip.x, chip.y,j] = ihcan
                     ihcans.append(ihcan)
                     # Add an edge from the DRNL to the IHCAN, to send the data
                     g.add_machine_edge_instance(
@@ -115,18 +112,11 @@ def run_model(
                     MachineEdge(ome, drnl),
                     ome.data_partition_name)
 
-                # Add an edge from the DRNL to the OME,
-                # to send acknowledgement (remove when using command tree)
-               # g.add_machine_edge_instance(
-               #     MachineEdge(drnl, ome),
-               #     ome.acknowledge_partition_name)
-
             count=count+1
 
     # here we define the MC ack tree
     parents = []
     parents.append(ome)
-   # num_macks = 4
     drnls_index=0
     target_drnls = len(drnls)
 
@@ -159,7 +149,6 @@ def run_model(
                     n_macks = 1
                 #update count and drnls remaining
                 parent_count += 1
-#                target_drnls-=n_macks
 
             #MC Ack for very small simulations
             elif len(drnls)<num_macks:
@@ -188,8 +177,6 @@ def run_model(
                     MachineEdge(mack, parent),
                     parent.acknowledge_partition_name)
 
-              #  if drnls_index >= len(drnls):
-              #      break
         # reupdate parents list with this row's macks
         parents[:]=macks
 
@@ -205,25 +192,9 @@ def run_model(
     #g.run(duration)
     g.run_until_complete()
 
-    # Wait for the application to finish
-    #txrx = g.transceiver()
-    '''app_id = globals_variables.get_simulator()._app_id
-    #logger.info("Running {} worker cores".format(n_workers))
-    logger.info("Waiting for application to finish...")
-    running = txrx.get_core_state_count(app_id, CPUState.RUNNING)
-    while running > 0:
-        time.sleep(0.5)
-        error = txrx.get_core_state_count(app_id, CPUState.RUN_TIME_EXCEPTION)
-        watchdog = txrx.get_core_state_count(app_id, CPUState.WATCHDOG)
-        if error > 0 or watchdog > 0:
-            error_msg = "Some cores have failed ({} RTE, {} WDOG)".format(
-                error, watchdog)
-            raise Exception(error_msg)
-        running = txrx.get_core_state_count(app_id, CPUState.RUNNING)'''
-
     # Get the data back
     samples = list()
-    for drnl in drnls:#drnls.itervalues():
+    for drnl in drnls:
         samples.append(drnl.read_samples(g.buffer_manager()))
     samples = numpy.hstack(samples)
 
