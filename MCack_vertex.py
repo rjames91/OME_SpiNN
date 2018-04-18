@@ -28,15 +28,12 @@ from spinn_front_end_common.abstract_models\
     .abstract_provides_n_keys_for_partition \
     import AbstractProvidesNKeysForPartition
 
-from spinn_machine.utilities.progress_bar import ProgressBar
-
-
 class MCackVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
         AbstractProvidesNKeysForPartition
         ):
-    """ A vertex that runs the DRNL algorithm
+    """ A vertex that runs the multi-cast acknowledge algorithm
     """
     # The number of bytes for the parameters
     _N_PARAMETER_BYTES = 3*4
@@ -102,32 +99,10 @@ class MCackVertex(
     def acknowledge_partition_name(self):
         return self._acknowledge_partition_name
 
-
-    def _get_model_parameters_array(self):
-        parameters = self._model.get_parameters()
-        numpy_format = list()
-        numpy_values = list()
-        for i, param in enumerate(parameters):
-            numpy_format.append(('f{}'.format(i), param.data_type))
-            numpy_values.append(param.value)
-        return numpy.array(
-            [tuple(numpy_values)], dtype=numpy_format).view("uint32")
-
-    def _get_model_state_array(self):
-        state = self._model.get_state_variables()
-        numpy_format = list()
-        numpy_values = list()
-        for i, param in enumerate(state):
-            numpy_format.append(('f{}'.format(i), param.data_type))
-            numpy_values.append(param.initial_value)
-        return numpy.array(
-            [tuple(numpy_values)], dtype=numpy_format).view("uint32")
-
     @property
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
-        sdram = self._N_PARAMETER_BYTES #+ self._data_size
-#        sdram += len(self._ihcan_vertices) * self._KEY_ELEMENT_TYPE.size
+        sdram = self._N_PARAMETER_BYTES
 
         resources = ResourceContainer(
             dtcm=DTCMResource(0),
@@ -146,7 +121,7 @@ class MCackVertex(
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
-        return 4#2  # two for control IDs
+        return 4#for control IDs
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
@@ -162,7 +137,6 @@ class MCackVertex(
 
         # Reserve and write the parameters region
         region_size = self._N_PARAMETER_BYTES
-#        region_size += (1 + len(self._ihcan_vertices)) * self._KEY_ELEMENT_TYPE.size
         spec.reserve_memory_region(0, region_size)
         spec.switch_write_focus(0)
 
@@ -186,14 +160,8 @@ class MCackVertex(
             command_key = routing_info.get_first_key_from_pre_vertex(
                 self, self._command_partition_name)
             spec.write_value(command_key, data_type=DataType.UINT32)
-            #spec.write_value(routing_info.get_routing_info_from_pre_vertex(
-            #    self, self._command_partition_name).first_key, data_type=DataType.UINT32)
-            #print "DRNL routing key:{}\n".format(routing_info.first_key)
         else:
-            #spec.write_value(0, data_type=DataType.UINT32)
             raise Exception("no mack key generated!")
-
-
 
         # Write number of child nodes
         spec.write_value(
