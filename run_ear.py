@@ -3,12 +3,11 @@ import model_launch_framework
 from scipy.io import wavfile
 import pylab as plt
 import math
-from vision.spike_tools.vis.vis_tools import plot_output_spikes
 from signal_prep import *
 from scipy.io import savemat, loadmat
 
 
-Fs = 100000.#22050.#44100.#34000.#24000.#24000.#40000.#
+Fs = 22050.#100000.#44100.#34000.#24000.#24000.#40000.#
 seg_size = 96
 bitfield = True#False#
 profile = False#True
@@ -49,6 +48,9 @@ wavfile.write('./no_samples/no_edit10.wav',fs,cut_audio)"""
 #audio_data = generate_signal(signal_type='file',dBSPL=40.,fs=Fs,ramp_duration=0.01,silence=True,silence_duration=0.1,
 #                             file_name='./10speakers_2numbers_5repeats.wav',plt=None)#10speakers_2numbers_5repeats.wav
 
+# audio_data = generate_signal(signal_type='file',dBSPL=40.,fs=Fs,ramp_duration=0.01,silence=True,silence_duration=0.1,
+#                             file_name='./1speakers_1numbers_1000repeats.wav',plt=None)#10speakers_2numbers_5repeats.wav
+
 #plt.show()
 #numpy.save('../Brainstem/audio_data.npy',audio_data)
 #concha = test_filter(audio_data,0.1783,0,-0.1783,1,-1.3477,0.6433)
@@ -60,7 +62,7 @@ if Fs > 34000.:
     pole_freqs = numpy.logspace(1.477,4.25,3000)#full hearing spectrum
     rt = False
 else:
-    pole_freqs = numpy.logspace(1.477,3.95,100)#up to 9k range
+    pole_freqs = numpy.logspace(1.477,3.95,8)#up to 9k range
     rt= True
    # rt = False
 
@@ -86,7 +88,7 @@ audio_data = audio_data[0:int(numpy.floor(len(audio_data)/seg_size)*seg_size)]
 #plt.plot(audio_data)
 #plt.show
 last_non_zero = numpy.nonzero(audio_data)[0].max()
-print "audio sample {}:{:.100e}".format(last_non_zero,audio_data[last_non_zero].astype(numpy.float32))
+#print "audio sample {}:{:.100e}".format(last_non_zero,audio_data[last_non_zero].astype(numpy.float32))
 
 
 # plt.figure()
@@ -178,7 +180,7 @@ if bitfield:
     plt.xlabel('time (s)')
     plt.ylabel('AN fibre best frequency (Hz)')
 
-    numpy.save("./spike_trains.npy",[spike_trains,scale_factor])
+    #numpy.save("./spike_trains.npy",[spike_trains,scale_factor])
 
 #plot_output_spikes(spike_trains,plotter=plt,markersize=1,color='black')'''
 
@@ -203,7 +205,7 @@ plt.show()
 #print "single audio_data[9998]{:.100e}".format(numpy.float32(audio_data[9998]))
 
 # Save the results
-numpy.save("./results.npy",drnl[1][:])
+#numpy.save("./results.npy",drnl[1][:])
 #savemat("/home/rjames/Dropbox (The University of Manchester)/EarProject/MAP_BS/MAP/results.mat",mdict={'spinn':drnl[1][:]},long_field_names=True)
 #numpy.save("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_no5.npy", [spike_trains,duration,Fs])
 #numpy.save("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_10sp_2num_5rep.npy", [spike_trains,duration,Fs])

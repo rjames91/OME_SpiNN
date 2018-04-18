@@ -31,12 +31,7 @@ def run_model(
         data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,
         fs=44100,resample_factor=1,num_macks=4,seg_size=96,bitfield=True,
         rt=True,profile=True):
-    """ Executes an MCMC model, returning the received samples
 
-    :param data: The audio input data
-
-    :return: nothing (output checked from ybug dump)
-      """
     # calculate number of mack tree rows above OME (final row is all DRNL instances)
     n_mack_tree_rows = int(numpy.ceil(math.log(len(pole_freqs),num_macks)))
     #calculate remainder drnls, if non-zero once this many are generated all following mack-->drnl connections will be 1 to 1
@@ -50,7 +45,7 @@ def run_model(
     # Get the number of cores available for use
     machine = g.machine()
     boards = dict()
-    #changed to lists to ensure data is read back in the same order that verticies are instantiated
+    #changed to lists to ensure data is read back in the same order that vertices are instantiated
     omes=list()
     drnls=list()
     ihcans=list()

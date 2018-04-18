@@ -55,7 +55,7 @@ class OMEVertex(
     """
 
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = (9*4) + (6*8)#12*4#6*4
+    _N_PARAMETER_BYTES = (9*4) + (6*8)
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_64#DataType.FLOAT_32
     # The data type of the data count
@@ -76,8 +76,6 @@ class OMEVertex(
 
     def __init__(self, data,fs,num_bfs,rt=True,profile=True,data_partition_name="OMEData",
             acknowledge_partition_name="OMEAck",command_partition_name="OMECommand"):
-    #def __init__(self, num_neurons, data, fs, num_bfs, data_partition_name="OMEData",
-    #         acknowledge_partition_name="OMEDataAck",command_partition_name="OMECommand"):
         """
 
         :param coordinator: The coordinator vertex
@@ -85,7 +83,6 @@ class OMEVertex(
         """
 
         MachineVertex.__init__(self, label="OME Node", constraints=None)
-        #ApplicationVertex.__init__(self, label="OME Node", constraints=None)
         AbstractProvidesNKeysForPartition.__init__(self)
         self._data = data
         self._data_partition_name = data_partition_name
@@ -109,12 +106,12 @@ class OMEVertex(
         )
         # calculate stapes hpf coefficients
         Wn = 1. / self._fs * 2. * 700.
-        #[self._shb, self._sha] = sig.butter(2, Wn, 'high')
-        matlab_output = loadmat('./hpf_coeffs.mat')
-        sha = matlab_output['stapesHighPass_a'].tolist()
-        self._sha = numpy.asarray(sha[0])
-        shb = matlab_output['stapesHighPass_b'].tolist()
-        self._shb = numpy.asarray(shb[0])
+        [self._shb, self._sha] = sig.butter(2, Wn, 'high')
+        #matlab_output = loadmat('./hpf_coeffs.mat')
+        #sha = matlab_output['stapesHighPass_a'].tolist()
+        #self._sha = numpy.asarray(sha[0])
+        #shb = matlab_output['stapesHighPass_b'].tolist()
+        #self._shb = numpy.asarray(shb[0])
 
         # Set up for profiling
         self._profile = profile
@@ -141,10 +138,6 @@ class OMEVertex(
     def get_acknowledge_key(self, placement, routing_info):
         key = routing_info.get_first_key_from_pre_vertex(
             placement.vertex, self._acknowledge_partition_name)
-        if key == 0:
-            print "0 key"
-      #      raise Exception("0 value key detected!")
-      #  else:
         return key
 
     def get_mask(self, placement, routing_info):
@@ -188,7 +181,7 @@ class OMEVertex(
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
-        return 4#2  # 2 for control IDs
+        return 4 #for control IDs
 
     @overrides(AbstractHasProfileData.get_profile_data)
     def get_profile_data(self, transceiver, placement):
@@ -233,14 +226,12 @@ class OMEVertex(
 
         # Write the data size in words
         spec.write_value(
-            len(self._data) ,#* (float(self._DATA_ELEMENT_TYPE.size) / 4.0),
+            len(self._data) ,
             data_type=self._DATA_COUNT_TYPE)
 
         # Write the CoreID
         spec.write_value(
             placement.p, data_type=self._COREID_TYPE)
-
-     #   print "OME placement=",placement.p
 
         # Write number of drnls
         spec.write_value(
@@ -263,21 +254,13 @@ class OMEVertex(
                 self, self._data_partition_name).first_key
             data_key = routing_info.get_first_key_from_pre_vertex(
                 self, self._data_partition_name)
-            if data_key == 0:
-                print
-                #raise Exception("0 value key detected!")
-            #else:
             spec.write_value(data_key, data_type=DataType.UINT32)
         else:
             raise Exception("no ome key generated!")
-            #spec.write_value(0, data_type=DataType.UINT32)
 
         # write the command key
         command_key = routing_info.get_first_key_from_pre_vertex(
             self,self._command_partition_name)
-        if command_key==0:
-            print
-            #raise Exception("0 value key detected!")
         spec.write_value(command_key, data_type=DataType.UINT32)
 
         if(self._rt):

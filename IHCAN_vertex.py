@@ -43,7 +43,7 @@ class IHCANVertex(
     """ A vertex that runs the DRNL algorithm
     """
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 10*4#7*4
+    _N_PARAMETER_BYTES = 10*4#
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
@@ -79,48 +79,27 @@ class IHCANVertex(
         self._resample_factor=resample_factor
         self._fs=drnl.fs
         self._num_data_points = 2 * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
-       # self._recording_size = (self._num_data_points/self._resample_factor) * 4 * 1./32#numpy.ceil(self._num_data_points/32.0)#
         if bitfield:
             self._recording_size = numpy.ceil((self._num_data_points * 4)/32.)
         else:
-            self._recording_size = self._num_data_points * 4 #* 1./32#numpy.ceil(self._num_data_points/32.0)#
+            self._recording_size = self._num_data_points * 4
         self._seed = seed
         self._data_size = (
             self._num_data_points * self._DATA_ELEMENT_TYPE.size +
             self._DATA_COUNT_TYPE.size
         )
         self._sdram_usage = (
-            self._N_PARAMETER_BYTES #+ self._data_size
+            self._N_PARAMETER_BYTES
         )
         # Set up for profiling
         self._n_profile_samples = 10000
         self._bitfield = bitfield
         self._profile = profile
 
-    def _get_model_parameters_array(self):
-        parameters = self._model.get_parameters()
-        numpy_format = list()
-        numpy_values = list()
-        for i, param in enumerate(parameters):
-            numpy_format.append(('f{}'.format(i), param.data_type))
-            numpy_values.append(param.value)
-        return numpy.array(
-            [tuple(numpy_values)], dtype=numpy_format).view("uint32")
-
-    def _get_model_state_array(self):
-        state = self._model.get_state_variables()
-        numpy_format = list()
-        numpy_values = list()
-        for i, param in enumerate(state):
-            numpy_format.append(('f{}'.format(i), param.data_type))
-            numpy_values.append(param.initial_value)
-        return numpy.array(
-            [tuple(numpy_values)], dtype=numpy_format).view("uint32")
-
     @property
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
-        sdram = self._N_PARAMETER_BYTES #+ self._data_size
+        sdram = self._N_PARAMETER_BYTES
         sdram += 1 * self._KEY_ELEMENT_TYPE.size
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
@@ -138,11 +117,11 @@ class IHCANVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
-        return ExecutableType.USES_SIMULATION_INTERFACE #ExecutableType.SYNC
+        return ExecutableType.USES_SIMULATION_INTERFACE
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
-        return 4#2  # 2 for control IDs
+        return 4#for control IDs
 
     @overrides(AbstractHasProfileData.get_profile_data)
     def get_profile_data(self, transceiver, placement):
@@ -213,8 +192,6 @@ class IHCANVertex(
         # Write the Acknowledge key
         spec.write_value(self._drnl.get_acknowledge_key(
             placement, routing_info))
-       # print self._drnl.get_acknowledge_key(
-       #     placement, routing_info)
 
         #Write the spike resample factor
         spec.write_value(
@@ -234,8 +211,6 @@ class IHCANVertex(
         spec.write_array(recording_utilities.get_recording_header_array(
             [self._recording_size], ip_tags=ip_tags))
 
-#        print "IHCAN DRNL placement=",DRNL_placement
-        #print "IHCAN placement=",placement.p
         #Write profile regions
         if self._profile:
             profile_utils.write_profile_region_data(
@@ -253,9 +228,7 @@ class IHCANVertex(
         data = data_values.read_all()
 
         numpy_format=list()
-
         numpy_format.append(("AN",numpy.float32))
-        #numpy_format.append(("AN", numpy.uint32))
         if self._bitfield:
             formatted_data = numpy.array(data, dtype=numpy.uint8)
             unpacked = numpy.unpackbits(formatted_data)
@@ -273,14 +246,8 @@ class IHCANVertex(
                             self._num_data_points,placement.x,placement.y,placement.p))
 
             output_data = numpy.zeros(self._num_data_points)
-           # print("error: output data too small")
-
-        # Convert the data into an array of state variables
         #return formatted_data
         return output_data
-
-    #def get_minimum_buffer_sdram_usage(self):
-    #    return 1024
 
     def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
         return recording_utilities.get_n_timesteps_in_buffer_space(

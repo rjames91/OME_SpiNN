@@ -108,10 +108,6 @@ class DRNLVertex(
     def get_acknowledge_key(self, placement, routing_info):
         key = routing_info.get_first_key_from_pre_vertex(
             placement.vertex, self._acknowledge_partition_name)
-        if key == 0:
-            print "0 key"
-        #    raise Exception("0 value key detected!")
-        #else:
         return key
 
     @property
@@ -130,31 +126,10 @@ class DRNLVertex(
     def acknowledge_partition_name(self):
         return self._acknowledge_partition_name
 
-
-    def _get_model_parameters_array(self):
-        parameters = self._model.get_parameters()
-        numpy_format = list()
-        numpy_values = list()
-        for i, param in enumerate(parameters):
-            numpy_format.append(('f{}'.format(i), param.data_type))
-            numpy_values.append(param.value)
-        return numpy.array(
-            [tuple(numpy_values)], dtype=numpy_format).view("uint32")
-
-    def _get_model_state_array(self):
-        state = self._model.get_state_variables()
-        numpy_format = list()
-        numpy_values = list()
-        for i, param in enumerate(state):
-            numpy_format.append(('f{}'.format(i), param.data_type))
-            numpy_values.append(param.initial_value)
-        return numpy.array(
-            [tuple(numpy_values)], dtype=numpy_format).view("uint32")
-
     @property
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
-        sdram = self._N_PARAMETER_BYTES #+ self._data_size
+        sdram = self._N_PARAMETER_BYTES
         sdram += len(self._ihcan_vertices) * self._KEY_ELEMENT_TYPE.size
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
@@ -196,7 +171,7 @@ class DRNLVertex(
     def generate_data_specification(
             self, spec, placement, routing_info, tags, placements):
 
-        OME_placement=placements.get_placement_of_vertex(self._ome).p#how can this distinguish between multiple instances on chip?
+        OME_placement=placements.get_placement_of_vertex(self._ome).p
 
         # Reserve and write the parameters region
         region_size = self._N_PARAMETER_BYTES
@@ -239,28 +214,19 @@ class DRNLVertex(
             0, data_type=self._COREID_TYPE)
 
         # Write the Acknowledge key
-       # spec.write_value(self._ome.get_acknowledge_key(
-        #    placement, routing_info))
         spec.write_value(self._mack.get_acknowledge_key(
             placement, routing_info))
 
         # Write the key
         if len(keys)>0:
-            #spec.write_value(routing_info.get_routing_info_from_pre_vertex(
-            #    self, self._data_partition_name).first_key, data_type=DataType.UINT32)
-            #print "DRNL routing key:{}\n".format(routing_info.first_key)
             data_key_orig = routing_info.get_routing_info_from_pre_vertex(
                 self, self._data_partition_name).first_key
             data_key = routing_info.get_first_key_from_pre_vertex(
                 self, self._data_partition_name)
-            if data_key==0:
-                print
-                #raise Exception("0 value key detected!")
-            #else:
+
             spec.write_value(data_key, data_type=DataType.UINT32)
         else:
             raise Exception("no drnl key generated!")
-            #spec.write_value(0, data_type=DataType.UINT32)
 
         # Write number of ihcans
         spec.write_value(
