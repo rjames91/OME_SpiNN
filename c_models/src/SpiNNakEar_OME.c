@@ -322,7 +322,7 @@ void app_end(uint null_a,uint null_b)
     else
     {
         log_info("All data has been sent seg_index=%d",seg_index);
-        while (!spin1_send_mc_packet(r2s_key|1, 0, NO_PAYLOAD)) {
+        while (!spin1_send_mc_packet(r2s_key|1, 0, WITH_PAYLOAD)) {
             spin1_delay_us(1);
         }
         final_ack=1;
@@ -334,7 +334,7 @@ void data_read(uint null_a, uint null_b)
 	REAL *dtcm_buffer_in;
 	if(test_DMA == TRUE && sync_count<num_macks && seg_index==0)
 	{
-	    while (!spin1_send_mc_packet(r2s_key|1, 0, NO_PAYLOAD)) {
+	    while (!spin1_send_mc_packet(r2s_key|1, 0, WITH_PAYLOAD)) {
             spin1_delay_us(1);
         }
 	}

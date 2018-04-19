@@ -113,7 +113,7 @@ class MCackVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
-        return "MCACK.aplx"
+        return "SpiNNakEar_MCACK.aplx"
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):

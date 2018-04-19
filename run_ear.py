@@ -7,7 +7,7 @@ from signal_prep import *
 from scipy.io import savemat, loadmat
 
 
-Fs = 22050.#100000.#44100.#34000.#24000.#24000.#40000.#
+Fs = 22050.#24000.#34000.#100000.#44100.#40000.#
 seg_size = 96
 bitfield = True#False#
 profile = False#True

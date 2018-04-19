@@ -241,6 +241,11 @@ class DRNLVertex(
         # Write the sampling frequency
         spec.write_value(self._fs,data_type=DataType.UINT32)
 
+        #write the OME data key
+        ome_data_key = routing_info.get_first_key_from_pre_vertex(
+            self._ome, self._ome.data_partition_name)
+        spec.write_value(ome_data_key, data_type=DataType.UINT32)
+
     #    print "DRNL OME placement=",OME_placement
    #     print "DRNL placement=",placement.p
         if self._profile:
