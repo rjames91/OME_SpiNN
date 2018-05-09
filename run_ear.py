@@ -7,7 +7,7 @@ from signal_prep import *
 from scipy.io import savemat, loadmat
 
 
-Fs = 22050.#24000.#34000.#100000.#44100.#40000.#
+Fs = 22050.#24000.#34000.#10000-0.#44100.#40000.#
 seg_size = 96
 bitfield = True#False#
 profile = False#True
@@ -23,8 +23,8 @@ resample_factor = 1.
 #audio_data=numpy.fromfile("/home/rjames/Dropbox (The University of Manchester)/EarProject/map_sig",
 #                          dtype='float64')
 
-audio_data = generate_signal(freq=1000,dBSPL=20.,duration=0.05,
-                             modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True,silence_duration=0.05)
+audio_data = generate_signal(freq=1000,dBSPL=20.,duration=1.,
+                             modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True,silence_duration=0.005)
 #audio_data = numpy.concatenate((audio_data,audio_data,audio_data))
 
 # matlab = loadmat("/home/rjames/Dropbox (The University of Manchester)/EarProject/MAP_BS/map_64.mat")
@@ -49,7 +49,7 @@ wavfile.write('./no_samples/no_edit10.wav',fs,cut_audio)"""
 #                             file_name='./10speakers_2numbers_5repeats.wav',plt=None)#10speakers_2numbers_5repeats.wav
 
 # audio_data = generate_signal(signal_type='file',dBSPL=40.,fs=Fs,ramp_duration=0.01,silence=True,silence_duration=0.1,
-#                             file_name='./1speakers_1numbers_1000repeats.wav',plt=None)#10speakers_2numbers_5repeats.wav
+#                             file_name='./1speakers_1numbers_150repeats.wav',plt=None)#10speakers_2numbers_5repeats.wav
 
 #plt.show()
 #numpy.save('../Brainstem/audio_data.npy',audio_data)
@@ -62,7 +62,7 @@ if Fs > 34000.:
     pole_freqs = numpy.logspace(1.477,4.25,3000)#full hearing spectrum
     rt = False
 else:
-    pole_freqs = numpy.logspace(1.477,3.95,8)#up to 9k range
+    pole_freqs = numpy.logspace(1.477,3.95,100)#up to 9k range
     rt= True
    # rt = False
 
@@ -105,7 +105,10 @@ samples = model_launch_framework.run_model(
 #samples=numpy.load("./samples.npy")
 
 #convert to spike train
-spike_trains=list()
+spike_trains=[]
+spike_times = []
+for _ in range(len(pole_freqs)*10):
+    spike_times.append([])
 spike_index=0
 ihc_index=0
 
@@ -124,8 +127,9 @@ for ihc in ihc_output:
         idxs = numpy.nonzero(HSR)
         #if len(idxs[0]) == 0:
             #print "spike_index {} from ihc{} did not record in full, re-simulate this particular channel".format(spike_index,ihc_index)
-        for i in idxs[0]:
-            spike_trains.append((spike_index, i))
+        # for i in idxs[0]:
+        #     spike_trains.append((spike_index, i))
+        spike_times[spike_index]=idxs[0]
 
     #increment spike_index
     spike_index=spike_index+1
@@ -139,8 +143,10 @@ for ihc in ihc_output:
         idxs = numpy.nonzero(LSR)
         #if len(idxs[0])==0:
             #print "spike_index {} from ihc{} did not record in full, re-simulate this particular channel".format(spike_index,ihc_index)
-        for i in idxs[0]:
-            spike_trains.append((spike_index, i))
+        # for i in idxs[0]:
+        #     spike_trains.append((spike_index, i))
+        spike_times[spike_index]=idxs[0]
+
     # increment spike_index
     spike_index = spike_index + 1
     # increment ihc_index
@@ -150,37 +156,44 @@ if bitfield:
     #spike_trains=numpy.load("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_kate_a_10kfib.npy")
     #[spike_trains,scale_factor]=numpy.load("./spike_trains.npy")
     duration = len(audio_data)/Fs
-    spike_times = [spike_time for (neuron_id, spike_time) in spike_trains]
-    scale_factor = duration/numpy.max(spike_times)
-    scaled_times = [spike_time * scale_factor for spike_time in spike_times]
-    spike_ids = [neuron_id for (neuron_id, spike_time) in spike_trains]
-    spike_ids[:] = [neuron_id + 1 for neuron_id in spike_ids]
+    # spike_times = [spike_time for (neuron_id, spike_time) in spike_trains]
+    max_time = 0
+    for neuron in spike_times:
+        if neuron.size > 0:
+            if neuron.max()>max_time:
+                max_time = neuron.max()
+    scale_factor = duration/max_time
+    scaled_times = [1000*spike_time * scale_factor for spike_time in spike_times]
+    spike_raster_plot_8(scaled_times, plt, duration, len(pole_freqs)*10 + 1, 0.001, title="pre pop activity")
+    plt.show()
+    # spike_ids = [neuron_id for (neuron_id, spike_time) in spike_trains]
+    # spike_ids[:] = [neuron_id + 1 for neuron_id in spike_ids]
+    #
+    # ##plot results
+    # plt.figure()
+    # plt.plot(scaled_times, spike_ids, '.', markersize=1,
+    #                  markerfacecolor='black', markeredgecolor='none',
+    #                  markeredgewidth=0)
+    #
+    # max_id = numpy.max(spike_ids)
+    # size = len(spike_ids)
+    # num_ticks=10.0
+    # test=spike_ids[::int(numpy.floor((size)/num_ticks)-1)]
+    # pole_freqs_size = len(pole_freqs)
+    #
+    # ticks=[]
+    # for i in range(int(num_ticks)+1):
+    #     idx = int(numpy.floor((i / (num_ticks)) * (pole_freqs_size-1)))
+    #     ticks.append(str(int(pole_freqs[idx])))
+    #
+    # plt.yticks(test, ticks)
+    #
+    # plt.ylim(numpy.min(spike_ids),numpy.max(spike_ids))
+    # plt.xlim(0,numpy.max(scaled_times))
+    # plt.xlabel('time (s)')
+    # plt.ylabel('AN fibre best frequency (Hz)')
 
-    ##plot results
-    plt.figure()
-    plt.plot(scaled_times, spike_ids, '.', markersize=1,
-                     markerfacecolor='black', markeredgecolor='none',
-                     markeredgewidth=0)
-
-    max_id = numpy.max(spike_ids)
-    size = len(spike_ids)
-    num_ticks=10.0
-    test=spike_ids[::int(numpy.floor((size)/num_ticks)-1)]
-    pole_freqs_size = len(pole_freqs)
-
-    ticks=[]
-    for i in range(int(num_ticks)+1):
-        idx = int(numpy.floor((i / (num_ticks)) * (pole_freqs_size-1)))
-        ticks.append(str(int(pole_freqs[idx])))
-
-    plt.yticks(test, ticks)
-
-    plt.ylim(numpy.min(spike_ids),numpy.max(spike_ids))
-    plt.xlim(0,numpy.max(scaled_times))
-    plt.xlabel('time (s)')
-    plt.ylabel('AN fibre best frequency (Hz)')
-
-    #numpy.save("./spike_trains.npy",[spike_trains,scale_factor])
+    numpy.save("./spike_trains.npy",scaled_times)
 
 #plot_output_spikes(spike_trains,plotter=plt,markersize=1,color='black')'''
 
@@ -199,7 +212,7 @@ else:
     print "max_hsr={}".format(numpy.max(drnl[1][:]))
 
 print "total stimulus time=",(len(audio_data)/Fs)
-plt.show()
+# plt.show()
 
 #print "audio_data[9998]{:.100e}".format(audio_data[9998])
 #print "single audio_data[9998]{:.100e}".format(numpy.float32(audio_data[9998]))
