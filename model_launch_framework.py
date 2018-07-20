@@ -56,7 +56,7 @@ def run_model(
         #create unique seeds for IHCAN instances
         n_ihcans = n_chips*n_drnl*n_ihcan
         random_range = numpy.arange(n_ihcans*4,dtype=numpy.uint32)
-        seeds = numpy.random.choice(random_range,n_ihcans*4,replace=False)
+        seeds = numpy.random.choice(random_range,int(n_ihcans*4),replace=False)
     seed_index = 0
     cf_index = 0
     count = 0

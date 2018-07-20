@@ -7,7 +7,7 @@ from signal_prep import *
 from scipy.io import savemat, loadmat
 
 
-Fs = 22050.#24000.#34000.#10000-0.#44100.#40000.#
+Fs = 22050.#44100.#24000.#34000.#10000-0.#40000.#
 seg_size = 96
 bitfield = True#False#
 profile = False#True
@@ -23,8 +23,8 @@ resample_factor = 1.
 #audio_data=numpy.fromfile("/home/rjames/Dropbox (The University of Manchester)/EarProject/map_sig",
 #                          dtype='float64')
 
-audio_data = generate_signal(freq=1000,dBSPL=20.,duration=1.,
-                             modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True,silence_duration=0.005)
+# audio_data = generate_signal(freq=1000,dBSPL=20.,duration=1.,
+#                              modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True,silence_duration=0.005)
 #audio_data = numpy.concatenate((audio_data,audio_data,audio_data))
 
 # matlab = loadmat("/home/rjames/Dropbox (The University of Manchester)/EarProject/MAP_BS/map_64.mat")
@@ -41,15 +41,45 @@ plt.show()
 cut_audio= raw_audio[0:8000]
 wavfile.write('./no_samples/no_edit10.wav',fs,cut_audio)"""
 
-#audio_data = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=50., duration=0.5,
+# audio_data = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=50., duration=0.5,
 #                             modulation_freq=0., fs=Fs, ramp_duration=0.0025, plt=None, silence=True)
+
+dBSPL = 20.
+sweep_duration = 0.1
+
+asc = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=dBSPL, duration=sweep_duration,
+                            modulation_freq=0., fs=Fs, ramp_duration=0.0025, plt=None, silence=True,ascending=True)
+
+des = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=dBSPL, duration=sweep_duration,
+                            modulation_freq=0., fs=Fs, ramp_duration=0.0025, plt=None, silence=True,ascending=False)
+
+a = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
+                            file_name='./a.wav',plt=None)
+i = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
+                            file_name='./i.wav',plt=None)
+u = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
+                            file_name='./u.wav',plt=None)
+
+sounds = [asc,des,a,i,u]#[asc]#
+
+audio_data = []
+required_total_time = 60.
+#for _ in range(n_repeats):
+while int(len(audio_data)/Fs) < required_total_time:
+    rand_choice = numpy.random.randint(len(sounds))
+    chosen_samples = sounds[rand_choice]
+    for sample in chosen_samples:
+        audio_data.append(sample)
+
+
+#plt.show()
 #audio_data = numpy.concatenate((audio_data,audio_data,audio_data))
 
 #audio_data = generate_signal(signal_type='file',dBSPL=40.,fs=Fs,ramp_duration=0.01,silence=True,silence_duration=0.1,
 #                             file_name='./10speakers_2numbers_5repeats.wav',plt=None)#10speakers_2numbers_5repeats.wav
 
-# audio_data = generate_signal(signal_type='file',dBSPL=40.,fs=Fs,ramp_duration=0.01,silence=True,silence_duration=0.1,
-#                             file_name='./1speakers_1numbers_150repeats.wav',plt=None)#10speakers_2numbers_5repeats.wav
+# audio_data = generate_signal(signal_type='file',dBSPL=40.,fs=Fs,ramp_duration=0.01,silence=False,silence_duration=0.1,
+#                             file_name='./yes_samples/yes_edit1.wav',plt=None)#10speakers_2numbers_5repeats.wav
 
 #plt.show()
 #numpy.save('../Brainstem/audio_data.npy',audio_data)
@@ -59,7 +89,7 @@ wavfile.write('./no_samples/no_edit10.wav',fs,cut_audio)"""
 #pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs_125",dtype='float32')
 
 if Fs > 34000.:
-    pole_freqs = numpy.logspace(1.477,4.25,3000)#full hearing spectrum
+    pole_freqs = numpy.logspace(1.477,4.25,100)#full hearing spectrum
     rt = False
 else:
     pole_freqs = numpy.logspace(1.477,3.95,100)#up to 9k range
@@ -166,6 +196,7 @@ if bitfield:
     scaled_times = [1000*spike_time * scale_factor for spike_time in spike_times]
     spike_raster_plot_8(scaled_times, plt, duration, len(pole_freqs)*10 + 1, 0.001, title="pre pop activity")
     plt.show()
+
     # spike_ids = [neuron_id for (neuron_id, spike_time) in spike_trains]
     # spike_ids[:] = [neuron_id + 1 for neuron_id in spike_ids]
     #
@@ -193,7 +224,7 @@ if bitfield:
     # plt.xlabel('time (s)')
     # plt.ylabel('AN fibre best frequency (Hz)')
 
-    numpy.save("./spike_trains.npy",scaled_times)
+    numpy.save("./spike_trains_asc_test_{}s.npy".format(int(duration)),scaled_times)
 
 #plot_output_spikes(spike_trains,plotter=plt,markersize=1,color='black')'''
 
