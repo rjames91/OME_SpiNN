@@ -60,15 +60,20 @@ i = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,si
 u = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
                             file_name='./u.wav',plt=None)
 
-sounds = [asc,des,a,i,u]#[asc]#
+sounds = [asc,des]#[asc,des,a,i,u]#
 
 audio_data = []
 required_total_time = 60.
+onset_times = [[]for _ in range(len(sounds))]
 #for _ in range(n_repeats):
 while int(len(audio_data)/Fs) < required_total_time:
     rand_choice = numpy.random.randint(len(sounds))
     chosen_samples = sounds[rand_choice]
+    onset_found = False
     for sample in chosen_samples:
+        if not onset_found and abs(sample)>1e-10:
+            onset_times[rand_choice].append(numpy.round(1000.*(len(audio_data)/Fs)))
+            onset_found = True
         audio_data.append(sample)
 
 
@@ -224,7 +229,9 @@ if bitfield:
     # plt.xlabel('time (s)')
     # plt.ylabel('AN fibre best frequency (Hz)')
 
-    numpy.save("./spike_trains_asc_test_{}s.npy".format(int(duration)),scaled_times)
+    #numpy.save("./spike_trains_asc_test_{}s.npy".format(int(duration)),scaled_times)
+    numpy.savez('./spinnakear_asc_des_{}s'.format(int(duration)), scaled_times=scaled_times,
+             onset_times=onset_times)
 
 #plot_output_spikes(spike_trains,plotter=plt,markersize=1,color='black')'''
 
