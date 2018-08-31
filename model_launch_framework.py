@@ -70,12 +70,14 @@ def run_model(
         ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
         omes.append(ome)
         boards[chip.x, chip.y] = chip.ip_address
+        ome_chip_xy = [(chip.x, chip.y)]
         break
 
     for chip in machine.chips:
         if count >= n_chips:
             break
-        else:
+        #else:
+        elif (chip.x, chip.y) not in ome_chip_xy:
             #create DRNLs
             for i in range(n_drnl):
 
