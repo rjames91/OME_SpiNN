@@ -201,7 +201,7 @@ class OMEVertex(
             self, spec, placement, routing_info, tags, placements):
 
         # Reserve and write the parameters region
-        region_size = self._N_PARAMETER_BYTES
+        region_size = self._N_PARAMETER_BYTES + self._data_size
         region_size += len(self._drnl_vertices) * self._KEY_ELEMENT_TYPE.size
         spec.reserve_memory_region(0, region_size)
 
