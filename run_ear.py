@@ -230,8 +230,8 @@ if bitfield:
     # plt.ylabel('AN fibre best frequency (Hz)')
 
     #numpy.save("./spike_trains_asc_test_{}s.npy".format(int(duration)),scaled_times)
-    numpy.savez('./spinnakear_asc_des_{}s'.format(int(duration)), scaled_times=scaled_times,
-             onset_times=onset_times)
+    numpy.savez_compressed('./spinnakear_asc_des_{}s_{}dB'.format(int(duration),int(dBSPL)), scaled_times=scaled_times,
+             onset_times=onset_times,dBSPL=dBSPL)
 
 #plot_output_spikes(spike_trains,plotter=plt,markersize=1,color='black')'''
 
