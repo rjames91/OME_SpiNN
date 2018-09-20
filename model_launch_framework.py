@@ -41,7 +41,6 @@ def run_model(
 
     # Set up the simulation
     g.setup(n_chips_required=n_chips+additional_chips, model_binary_module=model_binaries)
-
     # Get the number of cores available for use
     machine = g.machine()
     boards = dict()
@@ -192,6 +191,8 @@ def run_model(
     else:
         duration = 2000.
     #g.run(duration)
+    g.transceiver().set_watch_dog(False)
+
     g.run_until_complete()
 
     # Get the data back
