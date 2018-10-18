@@ -63,7 +63,7 @@ u = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,si
 sounds = [asc,des]#[asc,des,a,i,u]#
 
 audio_data = []
-required_total_time = 60.
+required_total_time = 1.
 onset_times = [[]for _ in range(len(sounds))]
 #for _ in range(n_repeats):
 while int(len(audio_data)/Fs) < required_total_time:
