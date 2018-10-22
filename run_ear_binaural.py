@@ -1,5 +1,5 @@
 import numpy
-import model_launch_framework
+import model_launch_framework_binaural
 from scipy.io import wavfile
 import pylab as plt
 import math
@@ -116,7 +116,7 @@ while 1:
 #pole_freqs=numpy.fromfile("./c_models/load_files/pole_freqs_125",dtype='float32')
 
 if Fs > 34000.:
-    pole_freqs = numpy.logspace(1.477,4.25,10)#full hearing spectrum
+    pole_freqs = numpy.logspace(1.477,4.25,100)#full hearing spectrum
     rt = False
 else:
     pole_freqs = numpy.logspace(1.477,3.95,100)#up to 9k range
@@ -160,7 +160,7 @@ binaural_audio_data = numpy.asarray(binaural_audio_data)
 #plt.show()
 
 #create framework of connected model vertices and run
-samples = model_launch_framework.run_model(
+samples = model_launch_framework_binaural.run_model(
     binaural_audio_data, n_chips=numpy.ceil(len(pole_freqs)/2)*num_channels,n_drnl=2,
     pole_freqs=pole_freqs,n_ihcan=5,fs=Fs,resample_factor=resample_factor,num_macks=4,
     bitfield=bitfield,rt=rt,profile=profile)
@@ -182,9 +182,9 @@ for ear in range(num_channels):
     ihc_index=0
 
     #obtain list of IHCAN outputs
-    ihc_output = [samples[ear][x:x+2*int(numpy.floor(len(audio_data)/seg_size))*seg_size]
-                  for x in xrange(0, len(samples), 2*int(numpy.floor(len(audio_data)/seg_size))*seg_size)]
-    drnl=numpy.zeros((len(pole_freqs)*10,int(numpy.floor(len(audio_data)/seg_size))*seg_size),dtype=numpy.float32)
+    ihc_output = [samples[ear][x:x+2*int(numpy.floor(len(audio_data[ear])/seg_size))*seg_size]
+                  for x in xrange(0, len(samples[ear]), 2*int(numpy.floor(len(audio_data[ear])/seg_size))*seg_size)]
+    drnl=numpy.zeros((len(pole_freqs)*10,int(numpy.floor(len(audio_data[ear])/seg_size))*seg_size),dtype=numpy.float32)
     for ihc in ihc_output:
         #obtain fibre response
         hsr = [ihc[x:x+seg_size] for x in xrange(0,len(ihc),seg_size*2)]
@@ -223,7 +223,7 @@ for ear in range(num_channels):
     if bitfield:
         #spike_trains=numpy.load("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_kate_a_10kfib.npy")
         #[spike_trains,scale_factor]=numpy.load("./spike_trains.npy")
-        duration = len(audio_data)/Fs
+        duration = len(audio_data[ear])/Fs
         # spike_times = [spike_time for (neuron_id, spike_time) in spike_trains]
         max_time = 0
         for neuron in spike_times:
@@ -233,7 +233,7 @@ for ear in range(num_channels):
         scale_factor = duration/max_time
         scaled_times = [1000*spike_time * scale_factor for spike_time in spike_times]
         spike_raster_plot_8(scaled_times, plt, duration, len(pole_freqs)*10 + 1, 0.001, title="pre pop activity ear {}".format(ear))
-        plt.show()
+        # plt.show()
 
         # spike_ids = [neuron_id for (neuron_id, spike_time) in spike_trains]
         # spike_ids[:] = [neuron_id + 1 for neuron_id in spike_ids]
@@ -271,7 +271,7 @@ for ear in range(num_channels):
 
     else:
         plt.figure()
-        drnl_time = numpy.linspace(0,len(audio_data)/Fs,len(audio_data))
+        drnl_time = numpy.linspace(0,len(audio_data[ear])/Fs,len(audio_data[ear]))
        # plt.plot(drnl_time,drnl.T)
         plt.plot(drnl[1][:])
         #plt.ylim((-0.5e-7,0.5e-7))
@@ -279,7 +279,7 @@ for ear in range(num_channels):
         #plt.figure()
         #plt.plot(drnl[-1][:])
         #plt.ylim((-0.5e-7,0.5e-7))
-      #  plt.xlim((0,len(audio_data)/Fs))
+      #  plt.xlim((0,len(audio_data[ear])/Fs))
         print "max_lsr={}".format(numpy.max(drnl[0][:]))
         print "max_hsr={}".format(numpy.max(drnl[1][:]))
         binaural_drnl.append(drnl)
@@ -287,8 +287,8 @@ for ear in range(num_channels):
         #                        drnl=drnl,
         #                        onset_times=onset_times, dBSPL=dBSPL)
 
-print "total stimulus time=",(len(audio_data)/Fs)
-# plt.show()
+    print "total stimulus time (ear {}) = {}".format(ear,len(audio_data[ear])/Fs)
+plt.show()
 
 #print "audio_data[9998]{:.100e}".format(audio_data[9998])
 #print "single audio_data[9998]{:.100e}".format(numpy.float32(audio_data[9998]))

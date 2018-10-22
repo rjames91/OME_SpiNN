@@ -45,7 +45,11 @@ def run_model(
     additional_chips *= n_ears
 
     # Set up the simulation
-    g.setup(n_chips_required=n_chips+additional_chips, model_binary_module=model_binaries)
+    if n_ears>1:
+        requested_n_chips = max(n_chips+additional_chips,2*48)
+    else:
+        requested_n_chips = n_chips+additional_chips
+    g.setup(n_chips_required=requested_n_chips, model_binary_module=model_binaries)
     # Get the number of cores available for use
     machine = g.machine()
     boards = dict()
@@ -72,7 +76,7 @@ def run_model(
 
         #OME is on ethernet chip for live streaming
         for chip in machine.ethernet_connected_chips:
-            if (chip.x,chip.y) not in left_ear_chips:
+            if 1:#(chip.x,chip.y) not in left_ear_chips:
                 # create OME
                 ome = OMEVertex(data[ear], fs, len(pole_freqs),rt=rt)
                 g.add_machine_vertex_instance(ome)
@@ -217,12 +221,12 @@ def run_model(
         # Get the data back
         for drnl in drnls:
             samples[ear].append(drnl.read_samples(g.buffer_manager()))
-        samples = numpy.hstack(samples)
+        samples[ear] = numpy.hstack(samples[ear])
 
         print "ear{} channels running:{}".format(ear,len(drnls))
-        print "output data: {} fibres with length {}".format(len(ihcans)*2,len(samples))
-        if(len(samples) != len(ihcans)*2*numpy.floor(len(data)/seg_size)*seg_size):
-            print "samples length {} isn't expected size {}".format(len(samples),len(ihcans)*2*numpy.floor(len(data)/seg_size)*seg_size)
+        print "output data: {} fibres with length {}".format(len(ihcans)*2,len(samples[ear]))
+        if(len(samples[ear]) != len(ihcans)*2*numpy.floor(len(data[ear])/seg_size)*seg_size):
+            print "samples length {} isn't expected size {}".format(len(samples[ear]),len(ihcans)*2*numpy.floor(len(data[ear])/seg_size)*seg_size)
 ##end for
 
     # Close the machine

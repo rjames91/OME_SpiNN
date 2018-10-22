@@ -20,6 +20,7 @@
 #include <data_specification.h>
 #include <profiler.h>
 #include <profile_tags.h>
+#include <debug.h>
 
 //#define PROFILE
 
@@ -392,7 +393,7 @@ void process_chan(REAL *in_buffer)
 #ifdef PRINT
 	io_printf (IO_BUF, "[core %d] segment %d (offset=%d) starting processing\n", coreID,seg_index,segment_offset);
 #endif
-	
+
 	for(i=0;i<SEGSIZE;i++)
 	{
 		//concha
@@ -422,7 +423,7 @@ void process_chan(REAL *in_buffer)
 		//update vars
 		past_earCanalInput[1]=past_earCanalInput[0];
 		past_earCanalInput[0]=earCanalInput;
-	
+
 		past_earCanal[1]=past_earCanal[0];
 		past_earCanal[0]=earCanalRes;
 

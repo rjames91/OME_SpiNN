@@ -60,7 +60,9 @@ i = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,si
 u = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
                             file_name='./u.wav',plt=None)
 
-sounds = [asc,des]#[asc,des,a,i,u]#
+matches_l = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
+                            file_name='./binaural_matches_6s.wav',plt=None,channel=1)
+sounds = [matches_l]#[asc,des]#[asc,des,a,i,u]#
 
 audio_data = []
 required_total_time = 1.
