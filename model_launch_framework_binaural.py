@@ -31,7 +31,7 @@ def run_model(
         data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,
         fs=44100,resample_factor=1,num_macks=4,seg_size=96,bitfield=True,
         rt=True,profile=True):
-    if len(data.shape)>1:
+    if data.shape[0]>1:
         n_ears = 2
     else:
         n_ears = 1
@@ -46,6 +46,7 @@ def run_model(
 
     # Set up the simulation
     if n_ears>1:
+        #ensure at least 2 boards are allocated (1 ethernet chip per ear)
         requested_n_chips = max(n_chips+additional_chips,2*48)
     else:
         requested_n_chips = n_chips+additional_chips
@@ -76,7 +77,7 @@ def run_model(
 
         #OME is on ethernet chip for live streaming
         for chip in machine.ethernet_connected_chips:
-            if 1:#(chip.x,chip.y) not in left_ear_chips:
+            if (chip.x,chip.y) not in left_ear_chips:
                 # create OME
                 ome = OMEVertex(data[ear], fs, len(pole_freqs),rt=rt)
                 g.add_machine_vertex_instance(ome)
@@ -103,7 +104,7 @@ def run_model(
                     # constrain placement to local chip
                     drnl.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
                     drnls.append(drnl)
-                    cf_index=cf_index+1
+                    cf_index += 1
 
                     for j in range(n_ihcan):
                         ihcan = IHCANVertex(drnl,resample_factor,
@@ -131,7 +132,7 @@ def run_model(
                         ome.data_partition_name)
                 if ear == 0:
                     left_ear_chips.append((chip.x, chip.y))
-                count=count+1
+                count+=1
 
         # here we define the MC ack tree
         parents = []

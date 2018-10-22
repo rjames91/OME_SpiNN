@@ -66,7 +66,7 @@ matches_r = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0
                             file_name='./binaural_matches_6s.wav',plt=None,channel=1)
 matches = numpy.asarray([matches_l,matches_r])
 
-sounds = [matches]#,asc,des]#[asc,des,a,i,u]#
+sounds = [matches,asc,des]#[matches_l]#[asc,des,a,i,u]#
 
 # check if any sounds are in stereo
 num_channels=1
@@ -74,25 +74,26 @@ for sound in sounds:
     if len(sound.shape)>1:
         num_channels=2
 audio_data = [[] for _ in range(num_channels)]
-required_total_time = 1.#60.
+required_total_time = 10.#60.
 onset_times = [[[]for _ in range(num_channels)]for _ in range(len(sounds))]
 
 while 1:
     rand_choice = numpy.random.randint(len(sounds))
     chosen_samples = sounds[rand_choice]
-    onset_found = False
     if len(chosen_samples.shape) > 1:#stereo
+        onset_found = False
         for i,channel in enumerate(chosen_samples):
             for sample in channel:
                 if not onset_found and abs(sample) > 1e-10:
-                    onset_times[rand_choice][i].append(numpy.round(1000. * (len(audio_data) / Fs)))
+                    onset_times[rand_choice][i].append(numpy.round(1000. * (len(audio_data[i]) / Fs)))
                     onset_found = True
                 audio_data[i].append(sample)
 
     else:
+        onset_found = False
         for sample in chosen_samples:
             if not onset_found and abs(sample)>1e-10:
-                onset_times[rand_choice][0].append(numpy.round(1000.*(len(audio_data)/Fs)))
+                onset_times[rand_choice][0].append(numpy.round(1000.*(len(audio_data[0])/Fs)))
                 onset_found = True
             audio_data[0].append(sample)
 
@@ -142,11 +143,8 @@ else:
 binaural_audio_data = []
 
 #check audio data can be divided evenly into 100 sample segements
-if num_channels ==1:
-    binaural_audio_data.append(numpy.asarray(audio_data[0:int(numpy.floor(len(audio_data)/seg_size)*seg_size)]))
-else: #stereo
-    for ear in range(num_channels):
-        binaural_audio_data.append(numpy.asarray(audio_data[ear][0:int(numpy.floor(len(audio_data[ear])/seg_size)*seg_size)]))
+for ear in range(num_channels):
+    binaural_audio_data.append(numpy.asarray(audio_data[ear][0:int(numpy.floor(len(audio_data[ear])/seg_size)*seg_size)]))
 
 binaural_audio_data = numpy.asarray(binaural_audio_data)
 #plt.figure()

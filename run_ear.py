@@ -7,7 +7,7 @@ from signal_prep import *
 from scipy.io import savemat, loadmat
 
 
-Fs = 22050.#44100.#24000.#34000.#10000-0.#40000.#
+Fs = 44100.#22050.#24000.#34000.#10000-0.#40000.#
 seg_size = 96
 bitfield = True#False#
 profile = False#True
@@ -61,7 +61,7 @@ u = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,si
                             file_name='./u.wav',plt=None)
 
 matches_l = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
-                            file_name='./binaural_matches_6s.wav',plt=None,channel=1)
+                            file_name='./binaural_matches_6s.wav',plt=None,channel=0)
 sounds = [matches_l]#[asc,des]#[asc,des,a,i,u]#
 
 audio_data = []
