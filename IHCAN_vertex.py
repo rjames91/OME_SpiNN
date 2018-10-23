@@ -45,7 +45,7 @@ class IHCANVertex(
     # The number of bytes for the parameters
     _N_PARAMETER_BYTES = 10*4#
     # The data type of each data element
-    _DATA_ELEMENT_TYPE = DataType.FLOAT_32
+    _DATA_ELEMENT_TYPE = DataType.FLOAT_32#DataType.FLOAT_64
     # The data type of the data count
     _DATA_COUNT_TYPE = DataType.UINT32
     # The numpy data type of each data element
@@ -80,9 +80,9 @@ class IHCANVertex(
         self._fs=drnl.fs
         self._num_data_points = 2 * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
         if bitfield:
-            self._recording_size = numpy.ceil((self._num_data_points * 4)/32.)
+            self._recording_size = numpy.ceil(float(self._num_data_points * self._DATA_ELEMENT_TYPE.size)/(self._DATA_ELEMENT_TYPE.size*8))
         else:
-            self._recording_size = self._num_data_points * 4
+            self._recording_size = self._num_data_points * self._DATA_ELEMENT_TYPE.size
         self._seed = seed
         self._data_size = (
             self._num_data_points * self._DATA_ELEMENT_TYPE.size +

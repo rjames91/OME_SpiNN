@@ -79,7 +79,7 @@ def run_model(
         for chip in machine.ethernet_connected_chips:
             if (chip.x,chip.y) not in left_ear_chips:
                 # create OME
-                ome = OMEVertex(data[ear], fs, len(pole_freqs),rt=rt)
+                ome = OMEVertex(data[ear], fs, len(pole_freqs),rt=rt,profile=profile)
                 g.add_machine_vertex_instance(ome)
                 # constrain placement to local chip
                 ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
@@ -99,7 +99,7 @@ def run_model(
                 for i in range(n_drnl):
 
                     CF=pole_freqs[cf_index]
-                    drnl=DRNLVertex(ome,CF,delays[cf_index])
+                    drnl=DRNLVertex(ome,CF,delays[cf_index],profile=profile)
                     g.add_machine_vertex_instance(drnl)
                     # constrain placement to local chip
                     drnl.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
