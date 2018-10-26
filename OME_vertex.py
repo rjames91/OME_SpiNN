@@ -22,7 +22,8 @@ from spinn_front_end_common.utilities import helpful_functions
 from spinn_front_end_common.interface.buffer_management \
     import recording_utilities
 from spinn_front_end_common.utilities.utility_objs import ExecutableType
-
+from spinn_front_end_common.interface.profiling.profile_data \
+    import ProfileData
 
 from spinn_front_end_common.abstract_models\
     .abstract_provides_n_keys_for_partition \
@@ -57,11 +58,11 @@ class OMEVertex(
     # The number of bytes for the parameters
     _N_PARAMETER_BYTES = (9*4) + (6*8)
     # The data type of each data element
-    _DATA_ELEMENT_TYPE = DataType.FLOAT_64#DataType.FLOAT_32
+    _DATA_ELEMENT_TYPE = DataType.FLOAT_64#DataType.FLOAT_32#
     # The data type of the data count
     _DATA_COUNT_TYPE = DataType.UINT32
     # The numpy data type of each data element
-    _NUMPY_DATA_ELEMENT_TYPE = numpy.double#numpy.single
+    _NUMPY_DATA_ELEMENT_TYPE = numpy.double#numpy.single#
     # The data type of the keys
     _KEY_ELEMENT_TYPE = DataType.UINT32
     # the data type of the coreID
@@ -116,6 +117,7 @@ class OMEVertex(
         # Set up for profiling
         self._profile = profile
         self._n_profile_samples = 10000
+        self._process_profile_times = None
 
     @property
     def data_partition_name(self):
@@ -185,9 +187,14 @@ class OMEVertex(
 
     @overrides(AbstractHasProfileData.get_profile_data)
     def get_profile_data(self, transceiver, placement):
-        return profile_utils.get_profiling_data(
-            1,
-            self.PROFILE_TAG_LABELS, transceiver, placement)
+        if self._profile:
+            profiles =  profile_utils.get_profiling_data(
+                1,
+                self.PROFILE_TAG_LABELS, transceiver, placement)
+            self._process_profile_times = profiles._tags['TIMER'][1]
+        else:
+            profiles=ProfileData(self.PROFILE_TAG_LABELS)
+        return profiles
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",

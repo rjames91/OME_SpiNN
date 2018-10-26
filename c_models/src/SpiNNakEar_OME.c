@@ -347,7 +347,7 @@ void data_read(uint null_a, uint null_b)
         #endif
 	    read_ticks++;
 		//assign recieve buffer
-		if(!read_switch)	
+		if(!read_switch)
 		{
 			dtcm_buffer_in=dtcm_buffer_a;
 			read_switch=1;
@@ -429,7 +429,7 @@ void process_chan(REAL *in_buffer)
 
 		earCanalOutput= earCanalGainScalar * earCanalRes + earCanalInput;
 
-		//AR
+		//Acoustic Reflex
 		ARoutput= ARatt * stapesScalar * earCanalOutput;
         filter_1 = stapesHP_b[0] * ARoutput +
 				    stapesHP_b[1] * past_stapesInput[0] +

@@ -29,6 +29,8 @@ from spinn_front_end_common.interface.profiling.abstract_has_profile_data \
     import AbstractHasProfileData
 from spinn_front_end_common.interface.profiling import profile_utils
 from spinn_front_end_common.interface.simulation import simulation_utilities
+from spinn_front_end_common.interface.profiling.profile_data \
+    import ProfileData
 
 
 from enum import Enum
@@ -95,6 +97,7 @@ class IHCANVertex(
         self._n_profile_samples = 10000
         self._bitfield = bitfield
         self._profile = profile
+        self._process_profile_times = None
 
     @property
     @overrides(MachineVertex.resources_required)
@@ -125,9 +128,14 @@ class IHCANVertex(
 
     @overrides(AbstractHasProfileData.get_profile_data)
     def get_profile_data(self, transceiver, placement):
-        return profile_utils.get_profiling_data(
-            self.REGIONS.PROFILE.value,
-            self.PROFILE_TAG_LABELS, transceiver, placement)
+        if self._profile:
+            profiles = profile_utils.get_profiling_data(
+                self.REGIONS.PROFILE.value,
+                self.PROFILE_TAG_LABELS, transceiver, placement)
+            self._process_profile_times = profiles._tags['TIMER'][1]
+        else:
+            profiles=ProfileData(self.PROFILE_TAG_LABELS)
+        return profiles
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
@@ -234,7 +242,9 @@ class IHCANVertex(
             unpacked = numpy.unpackbits(formatted_data)
             output_data = unpacked.astype(numpy.float32)
         else:
-            output_data = numpy.array(data, dtype=numpy.uint8).view(numpy_format)
+            formatted_data = numpy.array(data, dtype=numpy.uint8,copy=True).view(numpy_format)
+            output_data = formatted_data.copy()
+
 
         #check all expected data has been recorded
         if len(output_data) != self._num_data_points:
@@ -245,7 +255,8 @@ class IHCANVertex(
                             "at placement:{},{},{}".format(len(output_data),
                             self._num_data_points,placement.x,placement.y,placement.p))
 
-            output_data = numpy.zeros(self._num_data_points)
+            # output_data = numpy.zeros(self._num_data_points)
+            output_data.resize(self._num_data_points,refcheck=False)
         #return formatted_data
         return output_data
 

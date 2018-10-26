@@ -7,10 +7,10 @@ from signal_prep import *
 from scipy.io import savemat, loadmat
 
 
-Fs = 44100.#22050.#24000.#34000.#10000-0.#40000.#
+Fs = 22050.#44100.#24000.#34000.#10000-0.#40000.#
 seg_size = 96
 bitfield = True#False#
-profile = False#True
+profile = True#False#
 resample_factor = 1.
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1",dtype='float32')
 #audio_data=numpy.fromfile("./c_models/load_files/load1_1_6k_22k",dtype='float32')
@@ -59,18 +59,22 @@ i = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,si
                             file_name='./i.wav',plt=None)
 u = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
                             file_name='./u.wav',plt=None)
-
+tone_1 = generate_signal(freq=1000,dBSPL=dBSPL,duration=0.05,
+                       modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True)
 matches_l = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
                             file_name='./binaural_matches_6s.wav',plt=None,channel=0)
-sounds = [matches_l]#[asc,des]#[asc,des,a,i,u]#
-
+# sounds = [matches_l]#[asc,des]#[asc,des,a,i,u]#
+sounds = [tone_1,numpy.zeros(int(1000))]
 audio_data = []
 required_total_time = 1.
 onset_times = [[]for _ in range(len(sounds))]
 #for _ in range(n_repeats):
+i = False
 while int(len(audio_data)/Fs) < required_total_time:
     rand_choice = numpy.random.randint(len(sounds))
-    chosen_samples = sounds[rand_choice]
+    # chosen_samples = sounds[rand_choice]
+    chosen_samples = sounds[int(i)]
+    i = not i
     onset_found = False
     for sample in chosen_samples:
         if not onset_found and abs(sample)>1e-10:
@@ -127,13 +131,12 @@ audio_data = audio_data[0:int(numpy.floor(len(audio_data)/seg_size)*seg_size)]
 last_non_zero = numpy.nonzero(audio_data)[0].max()
 #print "audio sample {}:{:.100e}".format(last_non_zero,audio_data[last_non_zero].astype(numpy.float32))
 
-
 # plt.figure()
 # plt.plot(audio_data)
 #plt.show()
 
 #create framework of connected model vertices and run
-samples = model_launch_framework.run_model(
+samples,profiles = model_launch_framework.run_model(
     audio_data, n_chips=numpy.ceil(len(pole_freqs)/2),n_drnl=2,
     pole_freqs=pole_freqs,n_ihcan=5,fs=Fs,resample_factor=resample_factor,num_macks=4,
     bitfield=bitfield,rt=rt,profile=profile)
@@ -202,7 +205,7 @@ if bitfield:
     scale_factor = duration/max_time
     scaled_times = [1000*spike_time * scale_factor for spike_time in spike_times]
     spike_raster_plot_8(scaled_times, plt, duration, len(pole_freqs)*10 + 1, 0.001, title="pre pop activity")
-    plt.show()
+    # plt.show()
 
     # spike_ids = [neuron_id for (neuron_id, spike_time) in spike_trains]
     # spike_ids[:] = [neuron_id + 1 for neuron_id in spike_ids]
@@ -233,7 +236,7 @@ if bitfield:
 
     #numpy.save("./spike_trains_asc_test_{}s.npy".format(int(duration)),scaled_times)
     numpy.savez_compressed('./spinnakear_asc_des_{}s_{}dB'.format(int(duration),int(dBSPL)), scaled_times=scaled_times,
-             onset_times=onset_times,dBSPL=dBSPL)
+             onset_times=onset_times,dBSPL=dBSPL,profiles=profiles)
 
 #plot_output_spikes(spike_trains,plotter=plt,markersize=1,color='black')'''
 
@@ -252,6 +255,27 @@ else:
     print "max_hsr={}".format(numpy.max(drnl[1][:]))
 
 print "total stimulus time=",(len(audio_data)/Fs)
+
+title_list = ["OME (ear{})","DRNL (ear{})","IHC (ear{})"]
+for module in range(3):
+    plt.figure(title_list[module].format(0))
+    # make sure profile readings are the same length
+    if len(profiles[module].shape)==1 and module>0:
+        min_length = numpy.inf
+        for readings in profiles[module]:
+            if len(readings)<min_length:
+                min_length = len(readings)
+        mod_array = [reading[:min_length] for reading in profiles[module]]
+        plt.plot(mod_array)
+    else:
+        plt.plot(profiles[module])
+    plt.xlabel("segment index")
+    plt.ylabel("time taken (ms)")
+
+plt.figure("input audio")
+plt.plot(audio_data)
+
+plt.show()
 # plt.show()
 
 #print "audio_data[9998]{:.100e}".format(audio_data[9998])

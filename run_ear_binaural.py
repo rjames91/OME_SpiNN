@@ -9,9 +9,9 @@ from scipy.io import savemat, loadmat
 Fs = 22050.#44100.#24000.#34000.#10000-0.#40000.#
 seg_size = 96
 bitfield = True#False#
-profile = False#True
+profile = False#True#
 resample_factor = 1.
-dBSPL = 20.
+dBSPL = 30.
 sweep_duration = 0.1
 
 asc = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=dBSPL, duration=sweep_duration,
@@ -26,9 +26,9 @@ i = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,si
                             file_name='./i.wav',plt=None)
 u = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
                             file_name='./u.wav',plt=None)
-tone_13 = generate_signal(freq=13500,dBSPL=dBSPL,duration=1.,
+tone_13 = generate_signal(freq=13500,dBSPL=dBSPL,duration=0.05,
                        modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True)
-tone_1 = generate_signal(freq=1000,dBSPL=dBSPL,duration=1.,
+tone_1 = generate_signal(freq=1000,dBSPL=dBSPL,duration=0.05,
                        modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True)
 matches_l = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
                             file_name='./binaural_matches_6s.wav',plt=None,channel=0)
@@ -36,20 +36,44 @@ matches_r = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0
                             file_name='./binaural_matches_6s.wav',plt=None,channel=1)
 matches = numpy.asarray([matches_l,matches_r])
 
-sounds = [matches,tone_13,tone_1]#[matches_l]#[asc,des,a,i,u]#
-# sounds = [numpy.zeros((2,int(Fs)))]#[matches_l]#[asc,des,a,i,u]#
-# check if any sounds are in stereo
+stereo_1k = numpy.asarray([tone_1,tone_1])
+
+sounds_dict = { "matches":matches,
+                "matches_l":matches_l,
+                "matches_r":matches_r,
+                "tone_1":tone_1,
+                "tone_13":tone_13,
+                "a":a,
+                "i":i,
+                "u":u,
+                "asc":asc,
+                "des":des
+}
+
+#choose test stimuli here
+stimulus_list = ['matches']
+
+# check if any stimuli are in stereo
 num_channels=1
-for sound in sounds:
+for sound_string in stimulus_list:
+    sound = sounds_dict[sound_string]
     if len(sound.shape)>1:
         num_channels=2
 audio_data = [[] for _ in range(num_channels)]
-required_total_time = 60.
-onset_times = [[[]for _ in range(num_channels)]for _ in range(len(sounds))]
+for channel in audio_data:
+    for _ in range(100):
+        channel.append(0.)
 
+required_total_time = 1.
+onset_times = [[[]for _ in range(num_channels)]for _ in range(len(stimulus_list))]
+
+chosen_stimulus_list=[]
 while 1:
-    rand_choice = numpy.random.randint(len(sounds))
-    chosen_samples = sounds[rand_choice]
+    rand_choice = numpy.random.randint(len(stimulus_list))
+    chosen_string = stimulus_list[rand_choice]
+    if chosen_string not in chosen_stimulus_list:
+        chosen_stimulus_list.append(chosen_string)
+    chosen_samples = sounds_dict[chosen_string]
     if len(chosen_samples.shape) > 1:#stereo
         for i,channel in enumerate(chosen_samples):
             onset_found = False
@@ -62,15 +86,19 @@ while 1:
     else:
         onset_found = False
         for sample in chosen_samples:
-            if not onset_found and abs(sample)>1e-10:
+            if not onset_found and abs(sample) > 1e-10:
                 onset_times[rand_choice][0].append(numpy.round(1000.*(len(audio_data[0])/Fs)))
                 onset_found = True
             audio_data[0].append(sample)
             #add zero input to other ear
-            if num_channels > 1:
-                audio_data[1].append(0.)
+        if num_channels > 1:
+            # silence_amp = 1. * 28e-6 * 10. ** ((dBSPL-60.) / 20.)
+            silence_amp = 1. * 28e-6 * 10. ** (-20. / 20.) # -20dBSPL silence noise
+            silence_samples = numpy.random.rand(chosen_samples.size) * silence_amp
+            for sample in silence_samples:
+                audio_data[1].append(sample)
 
-    if int(len(audio_data[0]) / Fs) > required_total_time:
+    if len(audio_data[0]) / Fs > required_total_time:
         break
 
 if Fs > 34000.:
@@ -78,7 +106,7 @@ if Fs > 34000.:
     rt = False
 else:
     pole_freqs = numpy.logspace(1.477,3.95,100)#up to 9k range
-    rt= True
+    rt = True
 
 binaural_audio_data = []
 #check audio data can be divided evenly into 100 sample segements
@@ -90,14 +118,13 @@ binaural_audio_data = numpy.asarray(binaural_audio_data)
 duration = binaural_audio_data[0].size/Fs
 
 #create framework of connected model vertices and run
-samples = model_launch_framework_binaural.run_model(
+samples,profiles = model_launch_framework_binaural.run_model(
     binaural_audio_data, n_chips=numpy.ceil(len(pole_freqs)/2)*num_channels,n_drnl=2,
     pole_freqs=pole_freqs,n_ihcan=5,fs=Fs,resample_factor=resample_factor,num_macks=4,
     bitfield=bitfield,rt=rt,profile=profile)
 
 binaural_scaled_times = []
 binaural_drnl = []
-#begin for each ear
 
 for ear in range(num_channels):
     #convert to spike train
@@ -148,12 +175,19 @@ for ear in range(num_channels):
         scale_factor = duration/max_time
         scaled_times = [1000 * spike_time * scale_factor for spike_time in spike_times]
         spike_raster_plot_8(scaled_times, plt, duration, len(pole_freqs)*10 + 1, 0.001, title="pre pop activity ear {}".format(ear))
+        psth_plot_8(plt, numpy.arange(1,len(scaled_times),2), scaled_times, bin_width=1. / 1000., duration=duration,
+                    title="PSTH_AN_HSR ear {}".format(ear))
+        psth_plot_8(plt, numpy.arange(0, len(scaled_times), 2), scaled_times, bin_width=1. / 1000., duration=duration,
+                    title="PSTH_AN_LSR ear {}".format(ear))
         binaural_scaled_times.append(scaled_times)
 
     else:
-        plt.figure()
+        plt.figure("VRR output")
         drnl_time = numpy.linspace(0,len(binaural_audio_data[ear])/Fs,len(binaural_audio_data[ear]))
-        plt.plot(drnl[1][:])
+        x = numpy.linspace(0,1,len(drnl[1]))
+        plt.plot(x,drnl[1][:])
+        plt.plot(x,drnl[0][:])
+        plt.xlim((0,1))
         print "max_lsr={}".format(numpy.max(drnl[0][:]))
         print "max_hsr={}".format(numpy.max(drnl[1][:]))
         binaural_drnl.append(drnl)
@@ -161,19 +195,45 @@ for ear in range(num_channels):
 print "total stimulus time = {}".format(duration)
 
 # Save the results
+results_directory = '/home/rjames/Dropbox (The University of Manchester)/EarProject/Pattern_recognition/spike_trains/IC_spikes'
+stimulus_string = ""
+for stim_string in chosen_stimulus_list:
+    stimulus_string += stim_string + "_"
 if bitfield:
-    numpy.savez_compressed('./spinnakear_matches_{}s_{}dB'.format(int(duration),int(dBSPL)), scaled_times=binaural_scaled_times,
-             onset_times=onset_times,dBSPL=dBSPL)
+    numpy.savez_compressed(results_directory+'/spinnakear_'+stimulus_string+'{}s_{}dB'.format(int(duration),int(dBSPL)),
+                           scaled_times=binaural_scaled_times,onset_times=onset_times,dBSPL=dBSPL,profiles=profiles)
 else:
-    numpy.savez_compressed('./spinnakear_13.5_1_kHz_{}s_{}dB_vrr'.format(int(duration), int(dBSPL)),
+    numpy.savez_compressed(results_directory+'/spinnakear_'+stimulus_string+'{}s_{}dB_ome_round'.format(int(duration), int(dBSPL)),
                            drnl=binaural_drnl,onset_times=onset_times, dBSPL=dBSPL)
-#numpy.save("./results.npy",drnl[1][:])
-#savemat("/home/rjames/Dropbox (The University of Manchester)/EarProject/MAP_BS/MAP/results.mat",mdict={'spinn':drnl[1][:]},long_field_names=True)
-#numpy.save("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_no5.npy", [spike_trains,duration,Fs])
-#numpy.save("/home/rjames/Dropbox (The University of Manchester)/EarProject/spike_trains_10sp_2num_5rep.npy", [spike_trains,duration,Fs])
-#numpy.savetxt("./results.csv",drnl, fmt="%e", delimiter=",")
 
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", drnl[1][:], fmt="%.1000e", delimiter=",")
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", audio_data, fmt="%.38e", delimiter=",")
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/complete.txt",[1],fmt="%f")
+
+if profile:
+    title_list = ["OME (ear{})","DRNL (ear{})","IHC (ear{})"]
+    for ear in range(num_channels):
+        for module in range(3):
+            plt.figure(title_list[module].format(ear))
+            # make sure profile readings are the same length
+            if len(profiles[ear,module].shape)==1 and module>0:
+                min_length = numpy.inf
+                for readings in profiles[ear,module]:
+                    if len(readings)<min_length:
+                        min_length = len(readings)
+                x = numpy.linspace(0, 1,min_length)
+                mod_array = [reading[:min_length] for reading in profiles[ear,module]]
+                plt.plot(mod_array)
+            else:
+                x = numpy.linspace(0, 1,profiles[ear,module].size)
+                # plt.plot(x,profiles[ear,module])
+                plt.plot(profiles[ear,module])
+            plt.xlabel("segment index")
+            plt.ylabel("time taken (ms)")
+
+plt.figure("input audio")
+for channel in binaural_audio_data:
+    t = numpy.linspace(0,duration,len(channel))
+    plt.plot(channel)
+    plt.xlabel("time (s)")
 plt.show()

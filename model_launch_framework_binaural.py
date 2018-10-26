@@ -58,9 +58,10 @@ def run_model(
 #repeat single ear partitioning etc for both ears - the only thing that should differ is the data input to OME
     binaural_drnls = []
     left_ear_chips = []
+    binaural_omes = []
     for ear in range(n_ears):
         #changed to lists to ensure data is read back in the same order that vertices are instantiated
-        omes=list()
+        # omes=list()
         drnls=list()
         ihcans=list()
         macks=list()
@@ -83,7 +84,7 @@ def run_model(
                 g.add_machine_vertex_instance(ome)
                 # constrain placement to local chip
                 ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
-                omes.append(ome)
+                binaural_omes.append(ome)
                 boards[chip.x, chip.y] = chip.ip_address
                 ome_chip_xy = [(chip.x, chip.y)]
                 if ear == 0:
@@ -211,7 +212,7 @@ def run_model(
         duration = (len(data)/fs) * 1000.
     else:
         duration = 2000.
-    #g.run(duration)
+    # g.run(duration)
     g.transceiver().set_watch_dog(False)
     g.run_until_complete()
 
@@ -229,8 +230,19 @@ def run_model(
         if(len(samples[ear]) != len(ihcans)*2*numpy.floor(len(data[ear])/seg_size)*seg_size):
             print "samples length {} isn't expected size {}".format(len(samples[ear]),len(ihcans)*2*numpy.floor(len(data[ear])/seg_size)*seg_size)
 ##end for
-
+    profiles = [[] for __ in range(n_ears)]
+    if profile:
+        for ear,ome in enumerate(binaural_omes):
+            drnl_profiles=[]
+            ihc_profiles=[]
+            profiles[ear].append(ome._process_profile_times)
+            for drnl in ome._drnl_vertices:
+                drnl_profiles.append(drnl._process_profile_times)
+                for ihc in drnl._ihcan_vertices:
+                    ihc_profiles.append(ihc._process_profile_times)
+            profiles[ear].append(numpy.asarray(drnl_profiles))
+            profiles[ear].append(numpy.asarray(ihc_profiles))
     # Close the machine
     g.stop()
 
-    return samples
+    return samples,numpy.asarray(profiles)

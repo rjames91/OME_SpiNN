@@ -63,7 +63,7 @@ def run_model(
     #OME is on ethernet chip for live streaming
     for chip in machine.ethernet_connected_chips:
         # create OME
-        ome = OMEVertex(data, fs, len(pole_freqs),rt=rt)
+        ome = OMEVertex(data, fs, len(pole_freqs),rt=rt,profile=profile)
         g.add_machine_vertex_instance(ome)
         # constrain placement to local chip
         ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
@@ -81,7 +81,7 @@ def run_model(
             for i in range(n_drnl):
 
                 CF=pole_freqs[cf_index]
-                drnl=DRNLVertex(ome,CF,delays[cf_index])
+                drnl=DRNLVertex(ome,CF,delays[cf_index],profile=profile)
                 g.add_machine_vertex_instance(drnl)
                 # constrain placement to local chip
                 drnl.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
@@ -203,10 +203,20 @@ def run_model(
 
     # Close the machine
     g.stop()
-
+    profiles = []
+    if profile:
+        drnl_profiles=[]
+        ihc_profiles=[]
+        profiles.append(ome._process_profile_times)
+        for drnl in ome._drnl_vertices:
+            drnl_profiles.append(drnl._process_profile_times)
+            for ihc in drnl._ihcan_vertices:
+                ihc_profiles.append(ihc._process_profile_times)
+        profiles.append(numpy.asarray(drnl_profiles))
+        profiles.append(numpy.asarray(ihc_profiles))
     print "channels running: ",len(drnls)
     print "output data: {} fibres with length {}".format(len(ihcans)*2,len(samples))
     if(len(samples) != len(ihcans)*2*numpy.floor(len(data)/seg_size)*seg_size):
         print "samples length {} isn't expected size {}".format(len(samples),len(ihcans)*2*numpy.floor(len(data)/seg_size)*seg_size)
 
-    return samples
+    return samples,numpy.asarray(profiles)
