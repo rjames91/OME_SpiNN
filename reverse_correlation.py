@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from signal_prep import generate_signal
+from signal_prep import generate_signal,spike_raster_plot_8
 
 Fs = 22050.
 
@@ -29,6 +29,20 @@ n_fibres_per_ihc = 10.
 an_spikes = an_data['scaled_times']
 n_ears= len(an_spikes.shape)
 
+test_data_file = 'spinnakear_'+test_stimulus+'_38s_'+intensity+'_'+n_fibres+'fibres'
+test_an_data = np.load(input_directory+test_data_file+'.npz')
+test_an_spikes = test_an_data['scaled_times']
+test_onset_times = test_an_data['onset_times']
+#extract single test average spikes for the tone_1 stimulus
+
+
+
+
+# spike_raster_plot_8(test_an_spikes, plt, 2., 1001, 0.001,
+#                     title="test data activity")
+# spike_raster_plot_8(an_spikes, plt, 2., 1001, 0.001,
+#                     title="training data activity")
+# plt.show()
 #obtain stimulus onset times and durations
 duration=150.
 onset_times = an_data['onset_times']
@@ -53,6 +67,7 @@ for dur in durations:
 #                 average_band_response[i][int(j/n_fibres_per_ihc),neuron_response_times]+=1
 #         average_band_response[i] = average_band_response[i] / (n_reps[i] * np.ones(average_band_response[i].shape))
 reverse_correlation_data = np.load(output_directory+test_file+'_reverse_correlation_data.npz')
+# reverse_correlation_data = np.load(input_directory+test_file+'_reverse_correlation_data.npz')
 average_band_response = reverse_correlation_data['average_band_response']
 tone_1 = reverse_correlation_data['original_stimulus']
 
@@ -60,7 +75,7 @@ tone_1= np.append(tone_1,np.zeros(int(np.ceil(duration * 0.001 * Fs))-len(tone_1
 #
 tau_max = int(10 * 0.001 * Fs)
 # for stim in average_band_response:
-stim=average_band_response[0]
+stim=average_band_response[1]
 lag_matrix = np.zeros((len(stim)*tau_max, int(np.ceil(duration * 0.001 * Fs))))
 for i,band in enumerate(stim):
     lag_matrix[(i*tau_max),:] = band[:]
@@ -71,7 +86,7 @@ auto_correlation = np.matmul(lag_matrix ,lag_matrix.transpose())
 cross_correlation = np.matmul(lag_matrix,tone_1.transpose())
 mapping_function = np.matmul(np.linalg.inv(auto_correlation),cross_correlation)
 
-np.savez_compressed(output_directory+test_file+'_reverse_correlation_data.npz',original_stimulus=tone_1,average_band_response=average_band_response,
+np.savez_compressed(input_directory+test_file+'_reverse_correlation_data.npz',original_stimulus=tone_1,average_band_response=average_band_response,
                    lag_matrix=lag_matrix,auto_correlation=auto_correlation,cross_correlation=cross_correlation,mapping_function=mapping_function)
 
 print
