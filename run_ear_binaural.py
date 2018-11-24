@@ -210,7 +210,7 @@ for stim_string in chosen_stimulus_list:
 if bitfield:
     #TODO: add durations for each stimulus
     numpy.savez_compressed(results_directory+'/spinnakear_'+stimulus_string+'{}s_{}dB_{}fibres'.format(int(duration),int(dBSPL),int(n_fibres)),
-                           scaled_times=binaural_scaled_times,onset_times=onset_times,dBSPL=dBSPL,profiles=profiles,Fs=Fs)
+                           scaled_times=binaural_scaled_times,onset_times=onset_times,dBSPL=dBSPL,profiles=profiles,Fs=Fs,audio_data=binaural_audio_data)
 else:
     numpy.savez_compressed(results_directory+'/spinnakear_'+stimulus_string+'{}s_{}dB_non_spiking_{}fibres'.format(int(duration),int(dBSPL),int(n_fibres)),
                            drnl=binaural_drnl,onset_times=onset_times, dBSPL=dBSPL,Fs=Fs)
