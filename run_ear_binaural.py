@@ -6,7 +6,7 @@ import math
 from signal_prep import *
 from scipy.io import savemat, loadmat
 
-Fs = 44100.#22050.#24000.#34000.#10000-0.#40000.#
+Fs = 22050.#100000.#44100.#24000.#34000.#10000-0.#40000.#
 seg_size = 96
 bitfield = True#False#
 profile = False#True#
@@ -56,7 +56,7 @@ sounds_dict = { "matches":matches,
 }
 
 #choose test stimuli here
-stimulus_list = ['tone_1']
+stimulus_list = ['yes']
 # check if any stimuli are in stereo
 num_channels=1
 for sound_string in stimulus_list:
@@ -68,7 +68,7 @@ audio_data = [[] for _ in range(num_channels)]
 #     for _ in range(100):
 #         channel.append(0.)
 
-required_total_time = 1.
+required_total_time = 0.5
 onset_times = [[[]for _ in range(num_channels)]for _ in range(len(stimulus_list))]
 
 chosen_stimulus_list=[]
