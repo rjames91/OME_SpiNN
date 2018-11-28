@@ -57,10 +57,12 @@ sounds_dict = { "matches":matches,
 
 #choose test stimuli here
 stimulus_list = ['yes']
+duration_dict = {}
 # check if any stimuli are in stereo
 num_channels=1
 for sound_string in stimulus_list:
     sound = sounds_dict[sound_string]
+    duration_dict[sound_string]= (len(sound)/Fs)*1000.#ms
     if len(sound.shape)>1:
         num_channels=2
 audio_data = [[] for _ in range(num_channels)]
@@ -208,12 +210,12 @@ stimulus_string = ""
 for stim_string in chosen_stimulus_list:
     stimulus_string += stim_string + "_"
 if bitfield:
-    #TODO: add durations for each stimulus
     numpy.savez_compressed(results_directory+'/spinnakear_'+stimulus_string+'{}s_{}dB_{}fibres'.format(int(duration),int(dBSPL),int(n_fibres)),
-                           scaled_times=binaural_scaled_times,onset_times=onset_times,dBSPL=dBSPL,profiles=profiles,Fs=Fs,audio_data=binaural_audio_data)
+                           scaled_times=binaural_scaled_times,onset_times=onset_times,dBSPL=dBSPL,profiles=profiles,Fs=Fs,audio_data=binaural_audio_data,
+                           duration_dict=duration_dict)
 else:
     numpy.savez_compressed(results_directory+'/spinnakear_'+stimulus_string+'{}s_{}dB_non_spiking_{}fibres'.format(int(duration),int(dBSPL),int(n_fibres)),
-                           drnl=binaural_drnl,onset_times=onset_times, dBSPL=dBSPL,Fs=Fs)
+                           drnl=binaural_drnl,onset_times=onset_times, dBSPL=dBSPL,Fs=Fs,audio_data=binaural_audio_data,duration_dict=duration_dict)
 
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", drnl[1][:], fmt="%.1000e", delimiter=",")
 #numpy.savetxt("/home/rjames/Dropbox (The University of Manchester)/EarProject/results.csv", audio_data, fmt="%.38e", delimiter=",")
