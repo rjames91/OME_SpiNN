@@ -19,6 +19,7 @@
 #include "stdfix-exp.h"
 #include "log.h"
 #include <data_specification.h>
+#include <debug.h>
 
 //=========GLOBAL VARIABLES============//
 uint coreID;
