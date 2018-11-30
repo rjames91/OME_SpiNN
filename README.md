@@ -1,6 +1,6 @@
 # OME_SpiNN
 
-repository needed to launch SpiNNakEar simulation using https://github.com/rjames91/OME_SpiNN/blob/master/run_ear.py
+repository needed to launch SpiNNakEar simulation using https://github.com/rjames91/OME_SpiNN/blob/master/run_ear_binaural.py
 
 n.b. C code of DRNL and IHCAN models can be found in https://github.com/rjames91/DRNL_SpiNN and https://github.com/rjames91/IHC_AN_SpiNN
 To build SpiNNakEar binaries the "-ffrestanding" compiler flags must be removed from spinnaker_tools.mk
