@@ -6,7 +6,7 @@ import math
 from signal_prep import *
 from scipy.io import savemat, loadmat
 
-Fs = 22050.#100000.#44100.#24000.#34000.#10000-0.#40000.#
+Fs = 100000.#22050.#44100.#24000.#34000.#10000-0.#40000.#
 seg_size = 96
 bitfield = True#False#
 profile = False#True#
@@ -39,6 +39,12 @@ matches_r = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0
                             file_name='./binaural_matches_6s.wav',plt=None,channel=1)
 matches = numpy.asarray([matches_l,matches_r])
 
+timit_l = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
+                            file_name='./10788.wav',plt=None,channel=0)
+timit_r = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
+                            file_name='./10788.wav',plt=None,channel=1)
+timit = numpy.asarray([timit_l,timit_r])
+
 stereo_1k = numpy.asarray([tone_1,tone_1_quiet])
 
 sounds_dict = { "matches":matches,
@@ -52,11 +58,12 @@ sounds_dict = { "matches":matches,
                 "u":u,
                 "asc":asc,
                 "des":des,
-                "yes":yes
+                "yes":yes,
+                "timit":timit
 }
 
 #choose test stimuli here
-stimulus_list = ['yes']
+stimulus_list = ['timit']
 duration_dict = {}
 # check if any stimuli are in stereo
 num_channels=1
@@ -66,11 +73,8 @@ for sound_string in stimulus_list:
     if len(sound.shape)>1:
         num_channels=2
 audio_data = [[] for _ in range(num_channels)]
-# for channel in audio_data:
-#     for _ in range(100):
-#         channel.append(0.)
 
-required_total_time = 0.5
+required_total_time = 1.#20.
 onset_times = [[[]for _ in range(num_channels)]for _ in range(len(stimulus_list))]
 
 chosen_stimulus_list=[]
@@ -84,7 +88,7 @@ while 1:
         for i,channel in enumerate(chosen_samples):
             onset_found = False
             for sample in channel:
-                if not onset_found and abs(sample) > 1e-10:
+                if not onset_found and abs(sample) >  4e-6:
                     #onset time, duration tuple (both in ms)
                     onset_times[rand_choice][i].append(numpy.round(1000. * (len(audio_data[i]) / Fs)))
                     onset_found = True
@@ -93,13 +97,12 @@ while 1:
     else:
         onset_found = False
         for sample in chosen_samples:
-            if not onset_found and abs(sample) > 1e-10:
+            if not onset_found and abs(sample) > 4e-6:
                 onset_times[rand_choice][0].append(numpy.round(1000.*(len(audio_data[0])/Fs)))
                 onset_found = True
             audio_data[0].append(sample)
             #add zero input to other ear
         if num_channels > 1:
-            # silence_amp = 1. * 28e-6 * 10. ** ((dBSPL-60.) / 20.)
             silence_amp = 1. * 28e-6 * 10. ** (-20. / 20.) # -20dBSPL silence noise
             silence_samples = numpy.random.rand(chosen_samples.size) * silence_amp
             for sample in silence_samples:
@@ -109,10 +112,10 @@ while 1:
         break
 
 if Fs > 34000.:
-    pole_freqs = numpy.logspace(1.477,4.25,100)#full hearing spectrum
+    pole_freqs = numpy.logspace(1.477,4.25,300)#full hearing spectrum
     rt = False
 else:
-    pole_freqs = numpy.logspace(1.477,3.95,100)#up to 9k range
+    pole_freqs = numpy.logspace(1.477,3.95,3000)#up to 9k range
     rt = True
 
 binaural_audio_data = []

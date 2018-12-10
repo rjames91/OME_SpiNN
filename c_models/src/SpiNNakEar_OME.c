@@ -66,6 +66,7 @@ int end_count_full;
 
 uint sync_count=0;
 uint read_ticks;
+bool first_tick = true;
 
 REAL *dtcm_buffer_a;
 REAL *dtcm_buffer_b;
@@ -318,7 +319,7 @@ void app_end(uint null_a,uint null_b)
     if(final_ack==1)
     {
         spin1_exit(0);
-        io_printf (IO_BUF, "spinn_exit\n");
+        io_printf (IO_BUF, "spinn_exit %\n");
     }
     else
     {
@@ -335,8 +336,12 @@ void data_read(uint null_a, uint null_b)
 	REAL *dtcm_buffer_in;
 	if(test_DMA == TRUE && sync_count<num_macks && seg_index==0)
 	{
-	    while (!spin1_send_mc_packet(r2s_key|1, 0, WITH_PAYLOAD)) {
-            spin1_delay_us(1);
+	    if(first_tick==true){
+		io_printf (IO_BUF, "sending r2s\n");
+	        while (!spin1_send_mc_packet(r2s_key|1, 0, WITH_PAYLOAD)) {
+                spin1_delay_us(1);
+            }
+            first_tick = false;
         }
 	}
 	//read from DMA and copy into DTCM
@@ -487,7 +492,7 @@ void transfer_handler(uint tid, uint ttag)
 void sync_check(uint mc_key, uint null)
 {
     sync_count++;
-    log_info("ack mcpacket recieved from key=%d sync_count=%d seg_index=%d\n",mc_key-2,sync_count,seg_index);
+    io_printf (IO_BUF,"ack mcpacket recieved from key=%d sync_count=%d seg_index=%d\n",mc_key-2,sync_count,seg_index);
 }
 
 void app_done ()

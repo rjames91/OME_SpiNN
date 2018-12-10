@@ -14,14 +14,8 @@ from spinn_front_end_common.abstract_models.abstract_has_associated_binary \
 from spinn_front_end_common.abstract_models\
     .abstract_generates_data_specification \
     import AbstractGeneratesDataSpecification
-from spinn_front_end_common.interface.buffer_management.buffer_models\
-    .abstract_receive_buffers_to_host import AbstractReceiveBuffersToHost
-from spinn_front_end_common.utilities import helpful_functions
-from spinn_front_end_common.interface.buffer_management \
-    import recording_utilities
 from spinn_front_end_common.utilities.utility_objs import ExecutableType
 
-from enum import Enum
 import numpy
 
 from spinn_front_end_common.abstract_models\
@@ -48,7 +42,7 @@ class MCackVertex(
     # the data type of the coreID
     _COREID_TYPE = DataType.UINT32
 
-    def __init__(self, parent,command_partition_name="MCackData",
+    def __init__(self, parent=None,command_partition_name="MCackData",
             acknowledge_partition_name="MCackDataAck"):
         """
 
@@ -56,36 +50,25 @@ class MCackVertex(
         """
         AbstractProvidesNKeysForPartition.__init__(self)
         MachineVertex.__init__(self, label="MCack Node", constraints=None)
-        self._parent = parent
-        self._parent.register_mack_processor(self)
-        self._fs=parent.fs
 
+        if parent is not None:
+            self.register_parent_processor(parent_vertex=parent)
         self._child_vertices = list()
         self._child_placements = list()
-        self._num_data_points = parent.n_data_points
-        self._data_size = (
-            self._num_data_points * self._DATA_ELEMENT_TYPE.size +
-            self._DATA_COUNT_TYPE.size
-        )
-        self._sdram_usage = (
-            self._N_PARAMETER_BYTES
-        )
         self._command_partition_name = command_partition_name
         self._acknowledge_partition_name = acknowledge_partition_name
 
     def register_mack_processor(self, child_vertex):
         self._child_vertices.append(child_vertex)
 
+    def register_parent_processor(self,parent_vertex):
+        self._parent = parent_vertex
 
     def get_acknowledge_key(self, placement, routing_info):
         key = routing_info.get_first_key_from_pre_vertex(
             placement.vertex, self._acknowledge_partition_name)
 
         return key
-
-    @property
-    def n_data_points(self):
-        return self._num_data_points
 
     @property
     def fs(self):

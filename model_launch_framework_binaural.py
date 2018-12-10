@@ -40,6 +40,7 @@ def run_model(
     n_mack_tree_rows = int(numpy.ceil(math.log(len(pole_freqs),num_macks)))
     #calculate remainder drnls, if non-zero once this many are generated all following mack-->drnl connections will be 1 to 1
     remainder_macks =(num_macks**(n_mack_tree_rows)) - len(pole_freqs)
+    # remainder_macks =(math.factorial(n_mack_tree_rows)*num_macks) - len(pole_freqs)
 
     additional_chips = calculate_additional_chips(num_macks=num_macks, num_rows=n_mack_tree_rows)
     additional_chips *= n_ears
@@ -50,6 +51,7 @@ def run_model(
         requested_n_chips = max(n_chips+additional_chips,2*48)
     else:
         requested_n_chips = n_chips+additional_chips
+    print "requested_n_boards:{}".format(numpy.ceil(requested_n_chips/48.))
     g.setup(n_chips_required=requested_n_chips, model_binary_module=model_binaries)
     # Get the number of cores available for use
     machine = g.machine()
@@ -136,85 +138,114 @@ def run_model(
                 count+=1
 
         # here we define the MC ack tree
-        parents = []
-        parents.append(ome)
-        drnls_index=0
-        target_drnls = len(drnls)
-
+        # parents = []
+        # parents.append(ome)
+        # drnls_index=0
+        # target_drnls = len(drnls)
+        #
+        # for k in range(n_mack_tree_rows):
+        #     # generate row mack vertices
+        #     if k<n_mack_tree_rows-1:
+        #         # clear macks list
+        #         macks[:] = []
+        #     parent_count=0
+        #     first=1
+        #     for parent in parents:
+        #         #reduced mack connections to account for remainder
+        #         if k == (n_mack_tree_rows-1) and remainder_macks>0 and len(drnls)>num_macks:
+        #             #calculate the distribution of the drnls among the
+        #             # available macks (min of 1, max of 4 drnls per mack)
+        #             #find available macks
+        #             avail_macks=len(parents)-parent_count
+        #
+        #             if avail_macks <= target_drnls and first:
+        #                 n_macks = remainder_macks % num_macks
+        #                 first=0
+        #             elif avail_macks * n_macks > target_drnls and avail_macks>1:
+        #                 n_macks = int((avail_macks*n_macks)/target_drnls)
+        #             else:
+        #                 n_macks = int(target_drnls/avail_macks)
+        #             #clip n_macks
+        #             if n_macks > num_macks:
+        #                 n_macks = num_macks
+        #             elif n_macks < 1:
+        #                 n_macks = 1
+        #             #update count and drnls remaining
+        #             parent_count += 1
+        #
+        #         #MC Ack for very small simulations
+        #         elif len(drnls)<num_macks:
+        #             n_macks=len(drnls)
+        #         else:
+        #             n_macks=num_macks
+        #         for l in range(n_macks):
+        #             #final row drnl connections
+        #             if k>= n_mack_tree_rows -1:
+        #                 mack=drnls[drnls_index]
+        #                 drnls_index += 1
+        #                 target_drnls -=1
+        #                 #register this drnl instance to parent node list
+        #                 mack.register_ack_processor(parent)
+        #             else:
+        #                 mack = MCackVertex(parent)
+        #                 g.add_machine_vertex_instance(mack)
+        #                 macks.append(mack)
+        #
+        #             # Add an edge to send r2s data
+        #             g.add_machine_edge_instance(
+        #                 MachineEdge(parent, mack),
+        #                 parent.command_partition_name)
+        #             # Add an edge to send ack
+        #             g.add_machine_edge_instance(
+        #                 MachineEdge(mack, parent),
+        #                 parent.acknowledge_partition_name)
+        #
+        #     # reupdate parents list with this row's macks
+        #     parents[:]=macks
+        row_macks = drnls
         for k in range(n_mack_tree_rows):
-            # generate row mack vertices
-            if k<n_mack_tree_rows-1:
-                # clear macks list
-                macks[:] = []
-            parent_count=0
-            first=1
-            for parent in parents:
-                #reduced mack connections to account for remainder
-                if k == (n_mack_tree_rows-1) and remainder_macks>0 and len(drnls)>num_macks:
-                    #calculate the distribution of the drnls among the
-                    # available macks (min of 1, max of 4 drnls per mack)
-                    #find available macks
-                    avail_macks=len(parents)-parent_count
-
-                    if avail_macks <= target_drnls and first:
-                        n_macks = remainder_macks % num_macks
-                        first=0
-                    elif avail_macks * n_macks > target_drnls and avail_macks>1:
-                        n_macks = int((avail_macks*n_macks)/target_drnls)
+            parents_look_up = []
+            parents = []
+            for mack_index,mack in enumerate(row_macks):
+                parent_index = int(mack_index/num_macks)
+                if parent_index not in parents_look_up:
+                    if len(row_macks) <= num_macks:
+                        parent = ome
                     else:
-                        n_macks = int(target_drnls/avail_macks)
-                    #clip n_macks
-                    if n_macks > num_macks:
-                        n_macks = num_macks
-                    elif n_macks < 1:
-                        n_macks = 1
-                    #update count and drnls remaining
-                    parent_count += 1
-
-                #MC Ack for very small simulations
-                elif len(drnls)<num_macks:
-                    n_macks=len(drnls)
+                        parent = MCackVertex()
+                        g.add_machine_vertex_instance(parent)
+                    parents.append(parent)
+                    parents_look_up.append(parent_index)
                 else:
-                    n_macks=num_macks
-                for l in range(n_macks):
-                    #final row drnl connections
-                    if k>= n_mack_tree_rows -1:
-                        mack=drnls[drnls_index]
-                        drnls_index += 1
-                        target_drnls -=1
-                        #register this drnl instance to parent node list
-                        mack.register_ack_processor(parent)
-                    else:
-                        mack = MCackVertex(parent)
-                        g.add_machine_vertex_instance(mack)
-                        macks.append(mack)
+                    parent = parents[parent_index]
 
-                    # Add an edge to send r2s data
-                    g.add_machine_edge_instance(
-                        MachineEdge(parent, mack),
-                        parent.command_partition_name)
-                    # Add an edge to send ack
-                    g.add_machine_edge_instance(
-                        MachineEdge(mack, parent),
-                        parent.acknowledge_partition_name)
+                parent.register_mack_processor(mack)
+                mack.register_parent_processor(parent)
+                # Add an edge to send r2s data
+                g.add_machine_edge_instance(
+                    MachineEdge(parent, mack),
+                    parent.command_partition_name)
+                # Add an edge to send ack
+                g.add_machine_edge_instance(
+                    MachineEdge(mack, parent),
+                    parent.acknowledge_partition_name)
 
-            # reupdate parents list with this row's macks
-            parents[:]=macks
+            row_macks[:] = parents
 
-        if target_drnls!=0:
-            raise ValueError('failed to setup MC ack tree structure')
         binaural_drnls.append(drnls)
 ##end for
 
-# Run the simulation
+    # Run the simulation
     if rt:
-        latency = 3 * (96./fs)
-        duration = (len(data)/fs) * 1000.
+        latency = 3 * (96. / fs)
+        duration = 1000.*((data.size / fs) + latency)
     else:
-        duration = 2000.
-    # g.run(duration)
+        latency = 3 * (10000e-6)
+        duration = 1000.*((10000e-6 * (data.size / 96.)) + latency)
+
     g.transceiver().set_watch_dog(False)
-    g.run_until_complete()
+    g.run(duration)
+    # g.run_until_complete()
 
 ##begin for
     samples = list()

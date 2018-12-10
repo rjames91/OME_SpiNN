@@ -103,8 +103,7 @@ class DRNLVertex(
     def register_processor(self, ihcan_vertex):
         self._ihcan_vertices.append(ihcan_vertex)
 
-    def register_ack_processor(self, mack):
-        mack.register_mack_processor(self)
+    def register_parent_processor(self, mack):
         self._mack=mack
 
     def get_acknowledge_key(self, placement, routing_info):
