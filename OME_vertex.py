@@ -35,7 +35,7 @@ import numpy
 import scipy.signal as sig
 from scipy.io import loadmat
 
-from spinn_machine.utilities.progress_bar import ProgressBar
+from spinn_utilities.progress_bar import ProgressBar
 from spynnaker.pyNN.utilities import constants
 from spinn_front_end_common.utilities import helpful_functions
 from spinn_front_end_common.interface.profiling import profile_utils
