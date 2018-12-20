@@ -112,7 +112,7 @@ while 1:
         break
 
 if Fs > 34000.:
-    pole_freqs = numpy.logspace(1.477,4.25,300)#full hearing spectrum
+    pole_freqs = numpy.logspace(1.477,4.25,30)#full hearing spectrum
     rt = False
 else:
     pole_freqs = numpy.logspace(1.477,3.95,3000)#up to 9k range
