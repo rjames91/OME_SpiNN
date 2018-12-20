@@ -20,7 +20,7 @@ asc = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=dBSPL, du
 des = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=dBSPL, duration=sweep_duration,
                             modulation_freq=0., fs=Fs, ramp_duration=0.0025, plt=None, silence=True,ascending=False)
 yes = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
-                            file_name='./yes_samples/yes_edit1.wav',plt=None)
+                            file_name='./yes_edit1.wav',plt=None)
 a = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
                             file_name='./a.wav',plt=None)
 i = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
