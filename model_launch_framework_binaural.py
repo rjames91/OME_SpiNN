@@ -30,7 +30,7 @@ def calculate_additional_chips(num_rows,num_macks):
 def run_model(
         data, n_chips=None,n_drnl=0,pole_freqs=[4000],n_ihcan=0,
         fs=44100,resample_factor=1,num_macks=4,seg_size=96,bitfield=True,
-        rt=True,profile=True):
+        profile=True):
     if data.shape[0]>1:
         n_ears = 2
     else:
@@ -56,6 +56,10 @@ def run_model(
     # Get the number of cores available for use
     machine = g.machine()
     boards = dict()
+    time_scale = g.timescale_factor()
+    if fs/time_scale > 22050:
+        raise Exception("The input sampling frequency is too high for the chosen simulation time scale."
+                        "Please reduce Fs or increase the time scale factor in the config file")
 
 #repeat single ear partitioning etc for both ears - the only thing that should differ is the data input to OME
     binaural_drnls = []
@@ -82,7 +86,7 @@ def run_model(
         for chip in machine.ethernet_connected_chips:
             if (chip.x,chip.y) not in left_ear_chips:
                 # create OME
-                ome = OMEVertex(data[ear], fs, len(pole_freqs),rt=rt,profile=profile)
+                ome = OMEVertex(data[ear], fs, len(pole_freqs),time_scale=time_scale,profile=profile)
                 g.add_machine_vertex_instance(ome)
                 # constrain placement to local chip
                 ome.add_constraint(ChipAndCoreConstraint(chip.x, chip.y))
@@ -172,12 +176,15 @@ def run_model(
 ##end for
 
     # Run the simulation
-    if rt:
-        latency = 3 * (96. / fs)
-        duration = 1000.*((data.size / fs) + latency)
-    else:
-        latency = 3 * (10000e-6)
-        duration = 1000.*((10000e-6 * (data.size / 96.)) + latency)
+
+    # if rt:
+    #     latency = 3 * (96. / fs)
+    #     duration = time_scale * 1000.*((data.size / fs) + latency)
+    # else:
+    #     latency = 3 * (10000e-6)
+    #     duration = 1000.*((10000e-6 * (data.size / 96.)) + latency)
+    latency = 3 * (96. / fs)
+    duration = time_scale * 1000. * ((data.size / fs) + latency)
 
     g.transceiver().set_watch_dog(False)
     g.run(duration)

@@ -252,6 +252,11 @@ class DRNLVertex(
             self._ome, self._ome.data_partition_name)
         spec.write_value(ome_data_key, data_type=DataType.UINT32)
 
+        #Write the size of the conn LUT
+        #self.get_spinnakear_master_pop_size()
+        #Write the conn LUT
+
+
     #    print "DRNL OME placement=",OME_placement
    #     print "DRNL placement=",placement.p
         if self._profile:

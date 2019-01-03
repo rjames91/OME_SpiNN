@@ -75,7 +75,7 @@ class OMEVertex(
         3: "PROCESS_FIXED_SYNAPSES",
         4: "PROCESS_PLASTIC_SYNAPSES"}
 
-    def __init__(self, data,fs,num_bfs,rt=True,profile=True,data_partition_name="OMEData",
+    def __init__(self, data,fs,num_bfs,time_scale=1,profile=True,data_partition_name="OMEData",
             acknowledge_partition_name="OMEAck",command_partition_name="OMECommand"):
         """
 
@@ -91,7 +91,7 @@ class OMEVertex(
         self._command_partition_name = command_partition_name
         self._fs=fs
         self._num_bfs = num_bfs
-        self._rt = rt
+        self._time_scale = time_scale
 
         self._drnl_vertices = list()
         self._drnl_placements = list()
@@ -270,10 +270,9 @@ class OMEVertex(
             self,self._command_partition_name)
         spec.write_value(command_key, data_type=DataType.UINT32)
 
-        if(self._rt):
-            spec.write_value(1,data_type=DataType.UINT32)
-        else:
-            spec.write_value(0,data_type=DataType.UINT32)
+
+        spec.write_value(self._time_scale,data_type=DataType.UINT32)
+
 
         # write the stapes high pass filter coefficients
         spec.write_value(

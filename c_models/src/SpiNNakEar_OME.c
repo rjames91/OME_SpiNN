@@ -86,7 +86,7 @@ enum params_enum {
     NUM_BFS,
     KEY,
     R2S_KEY,
-    RT,
+    TS,
     SHB1,
     SHB2,
     SHB3,
@@ -105,7 +105,7 @@ struct parameters {
     uint NUM_BFS;
     uint KEY;
     uint R2S_KEY;
-    uint RT;
+    uint TS;
     REAL SHB1;
     REAL SHB2;
     REAL SHB3;
@@ -128,8 +128,8 @@ uint placement_coreID;
 uint key;
 //ready to send key used for setup comms.
 uint r2s_key;
-//real-time flag
-uint rt;
+//time scale factor
+uint time_scale;
 //number of connected DRNL instances
 uint num_drnls;
 //number of connected acknowledgment tree instances
@@ -175,8 +175,8 @@ void app_init(void)
     r2s_key=params.R2S_KEY;
     log_info("r2s key=%d",r2s_key);
 
-    rt=params.RT;
-    log_info("rt=%d",rt);
+    time_scale=params.TS;
+    log_info("time_scale=%d",time_scale);
 
     //Get number of child DRNL vertices
     num_drnls=params.NUM_DRNL;
@@ -191,8 +191,9 @@ void app_init(void)
 
     Fs= (double)sampling_frequency;
     dt=(1.0/Fs);
-    if(rt)TIMER_TICK_PERIOD = (uint)(1e6 * ((REAL)SEGSIZE/Fs));//real-time
-    else TIMER_TICK_PERIOD = 10000;//Not real-time
+//    if(rt)TIMER_TICK_PERIOD = (uint)(1e6 * ((REAL)SEGSIZE/Fs));//real-time
+//    else TIMER_TICK_PERIOD = 10000;//Not real-time
+    TIMER_TICK_PERIOD = (uint)(1e6 * ((REAL)SEGSIZE/Fs) * time_scale);//scaled by simulation time scale
 
     log_info("timer period=%d",(uint)TIMER_TICK_PERIOD);
     log_info("Fs=%d",sampling_frequency);

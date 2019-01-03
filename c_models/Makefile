@@ -2,9 +2,9 @@ ifndef NEURAL_MODELLING_DIRS
     $(error NEURAL_MODELLING_DIRS is not set.  Please define NEURAL_MODELLING_DIRS (possibly by running "source setup" in the neural_modelling folder within the sPyNNaker source folder))
 endif
 
-APP := SpiNNakEar_MCACK#SpiNNakEar_OME#
+APP := SpiNNakEar_OME#SpiNNakEar_MCACK#
 BUILD_DIR = build/
-SOURCES = SpiNNakEar_MCack_node.c#SpiNNakEar_OME.c#src/OME_SpiNN_pipe_MC.c#src/OME_SpiNN.c#
+SOURCES = SpiNNakEar_OME.c#SpiNNakEar_MCack_node.c#src/OME_SpiNN_pipe_MC.c#src/OME_SpiNN.c#
 MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 CURRENT_DIR := $(dir $(MAKEFILE_PATH))
 SOURCE_DIR := $(abspath $(CURRENT_DIR))/src

@@ -6,13 +6,13 @@ import math
 from signal_prep import *
 from scipy.io import savemat, loadmat
 
-Fs = 100000.#22050.#44100.#24000.#34000.#10000-0.#40000.#
+Fs = 100000.#24000.#34000.#44100.#22050.#
 seg_size = 96
 bitfield = True#False#
 profile = False#True#
 psth = False
 resample_factor = 1.
-dBSPL = 30.
+dBSPL = 60.
 sweep_duration = 0.1
 
 asc = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=dBSPL, duration=sweep_duration,
@@ -30,7 +30,7 @@ u = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,si
 tone_13 = generate_signal(freq=13500,dBSPL=dBSPL,duration=0.05,
                        modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True)
 tone_1 = generate_signal(freq=1000,dBSPL=dBSPL,duration=0.05,
-                       modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True)
+                       modulation_freq=0.,fs=Fs,ramp_duration=0.005,plt=None,silence=True,silence_duration=0.075)
 tone_1_quiet = generate_signal(freq=1000,dBSPL=dBSPL/2.,duration=0.05,
                        modulation_freq=0.,fs=Fs,ramp_duration=0.0025,plt=None,silence=True)
 matches_l = generate_signal(signal_type='file',dBSPL=dBSPL,fs=Fs,ramp_duration=0.0025,silence=True,
@@ -63,7 +63,7 @@ sounds_dict = { "matches":matches,
 }
 
 #choose test stimuli here
-stimulus_list = ['timit']
+stimulus_list = ['tone_1']
 duration_dict = {}
 # check if any stimuli are in stereo
 num_channels=1
@@ -74,7 +74,7 @@ for sound_string in stimulus_list:
         num_channels=2
 audio_data = [[] for _ in range(num_channels)]
 
-required_total_time = 1.#20.
+required_total_time = 1.
 onset_times = [[[]for _ in range(num_channels)]for _ in range(len(stimulus_list))]
 
 chosen_stimulus_list=[]
@@ -111,12 +111,8 @@ while 1:
     if len(audio_data[0]) / Fs > required_total_time:
         break
 
-if Fs > 34000.:
-    pole_freqs = numpy.logspace(1.477,4.25,30)#full hearing spectrum
-    rt = False
-else:
-    pole_freqs = numpy.logspace(1.477,3.95,3000)#up to 9k range
-    rt = True
+max_power = min([numpy.log10(Fs/2.),4.25])
+pole_freqs = numpy.logspace(1.477,max_power,300)#spectrum available given Fs nyquist limits
 
 binaural_audio_data = []
 #check audio data can be divided evenly into 100 sample segements
@@ -131,7 +127,7 @@ duration = binaural_audio_data[0].size/Fs
 samples,profiles = model_launch_framework_binaural.run_model(
     binaural_audio_data, n_chips=numpy.ceil(len(pole_freqs)/2)*num_channels,n_drnl=2,
     pole_freqs=pole_freqs,n_ihcan=5,fs=Fs,resample_factor=resample_factor,num_macks=4,
-    bitfield=bitfield,rt=rt,profile=profile)
+    bitfield=bitfield,profile=profile)
 
 binaural_scaled_times = []
 binaural_drnl = []

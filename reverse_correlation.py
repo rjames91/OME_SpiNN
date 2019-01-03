@@ -24,36 +24,37 @@ def spikegram_generator(spikes,onset_times,duration,Fs,n_reps=None):
 
 
 def average_band_response_generator(spikes, onset_times, tau_max, duration, Fs, n_fibres_per_ihc=10.):
-    average_band_response = np.zeros((int((len(spikes) / n_fibres_per_ihc)), int(duration * 0.001 * Fs)))
-    n_reps = 0
-    for time in onset_times:
-        offset_time = time - (2 * (tau_max / Fs) * 1000.)
-        n_reps += 1
-        # find active neurons within time window
-        av_resp_buffer = np.zeros(average_band_response.shape)
-        for j, neuron in enumerate(spikes):
-            neuron_response_times = np.asarray([int((t - offset_time) * 0.001 * Fs)
-                                                for t in neuron if t >= offset_time and t < (offset_time + duration)])
-            if neuron_response_times.size > 0:
-            # add firing times to a count for all fibres in associated frequency band
-            # average_band_response[int(j/n_fibres_per_ihc),neuron_response_times]=+=1
-                av_resp_buffer[int(j/n_fibres_per_ihc), neuron_response_times] += 1
-        av_resp_buffer/=(n_fibres_per_ihc * np.ones(av_resp_buffer.shape))
-        zero_mask = average_band_response[:,:]==0
-        average_band_response+=av_resp_buffer*zero_mask
-        # average firing counts across number of presentations
-        # average_band_response /= (n_reps * n_fibres_per_ihc * np.ones(average_band_response.shape))
-    #average_band_response /= (n_fibres_per_ihc * np.ones(average_band_response.shape))
-    print "n_reps={}".format(n_reps)
+    # average_band_response = np.zeros((int((len(spikes) / n_fibres_per_ihc)), int(duration * 0.001 * Fs)))
+    # n_reps = 0
+    # for time in onset_times:
+    #     # offset_time = time - (2 * (tau_max / Fs) * 1000.)
+    #     offset_time = time - 20.
+    #     n_reps += 1
+    #     # find active neurons within time window
+    #     av_resp_buffer = np.zeros(average_band_response.shape)
+    #     for j, neuron in enumerate(spikes):
+    #         neuron_response_times = np.asarray([int((t - offset_time) * 0.001 * Fs) -1
+    #                                             for t in neuron if t >= offset_time and t < (offset_time + duration)])
+    #         if neuron_response_times.size > 0:
+    #         # add firing times to a count for all fibres in associated frequency band
+    #         # average_band_response[int(j/n_fibres_per_ihc),neuron_response_times]=+=1
+    #             av_resp_buffer[int(j/n_fibres_per_ihc), neuron_response_times] += 1
+    #     av_resp_buffer/=(n_fibres_per_ihc * np.ones(av_resp_buffer.shape))
+    #     zero_mask = average_band_response[:,:]==0
+    #     average_band_response+=av_resp_buffer*zero_mask
+    #     # average firing counts across number of presentations
+    #     # average_band_response /= (n_reps * n_fibres_per_ihc * np.ones(average_band_response.shape))
+    # #average_band_response /= (n_fibres_per_ihc * np.ones(average_band_response.shape))
+    # print "n_reps={}".format(n_reps)
 
-        #    average_band_response = np.zeros((int((len(spikes)/n_fibres_per_ihc)),int(duration*0.001*Fs)))
-        #    for j,neuron in enumerate(spikes):
-        #        neuron_response_times = np.asarray([int(t*0.001*Fs) for t in neuron if t<duration])
-        #        if neuron_response_times.size>0:
-        #            #add firing times to a count for all fibres in associated frequency band
-        #            average_band_response[int(j/n_fibres_per_ihc),neuron_response_times]+=1
-        #    #average firing counts across number of presentations
-        #    average_band_response /= (n_fibres_per_ihc * np.ones(average_band_response.shape))
+    average_band_response = np.zeros((int((len(spikes)/n_fibres_per_ihc)),int(duration*0.001*Fs)))
+    for j,neuron in enumerate(spikes):
+       neuron_response_times = np.asarray([int(t*0.001*Fs) for t in neuron if t<duration])
+       if neuron_response_times.size>0:
+           #add firing times to a count for all fibres in associated frequency band
+           average_band_response[int(j/n_fibres_per_ihc),neuron_response_times]+=1
+    #average firing counts across number of presentations
+    average_band_response /= (n_fibres_per_ihc * np.ones(average_band_response.shape))
     return average_band_response
 
 def lag_matrix_generator(stim,tau_max,duration,step=10):
@@ -83,34 +84,38 @@ Fs = 22050.
 n_fibres = '3000'
 test_stimulus = 'yes'
 duration = '21s'
-intensity = '60dB'
+intensity = '30dB'
 test_file = 'spinnakear_'+test_stimulus+'_'+duration+'_'+intensity+'_'+n_fibres+'fibres'
 an_data = np.load(input_directory+test_file+'.npz')
 n_fibres_per_ihc = 10.
 an_spikes = an_data['scaled_times']
 onset_times = an_data['onset_times']
 n_ears= len(an_spikes.shape)#todo:sort for 2 ears
-test_data_file = 'spinnakear_'+test_stimulus+'_2s_'+intensity+'_'+n_fibres+'fibres'
+test_data_file = 'spinnakear_'+test_stimulus+'_1s_'+intensity+'_'+n_fibres+'fibres'
 test_an_data = np.load(input_directory+test_data_file+'.npz')
 test_an_spikes = test_an_data['scaled_times']
 test_onset_times = test_an_data['onset_times']
 test_stimulus = test_an_data['audio_data'][0]
 
 #extract single test average spikes for the tone_1 stimulus
-tau_max_ms = 10
+tau_max_ms = 5
 tau_max = int(tau_max_ms * 0.001 * Fs)
 step = 10#int(1 * 0.001 * Fs)#int(tau_max/10.)
 #todo: the full binaural sound file can be obtained from the spinnakear sim output
 
 #trim stimulus so initial sample is onset time - 2*tau_max
 stimulus = an_data['audio_data'][0]
-onset_sample = int(((onset_times[0][0][0]*0.001) * Fs) - 2 * tau_max)
-offset_sample = int(((onset_times[0][0][5]*0.001) * Fs) - 2 * tau_max)
+# onset_sample = int(((onset_times[0][0][0]*0.001) * Fs) - 2 * tau_max)
+# offset_sample = int(((onset_times[0][0][1]*0.001) * Fs) - 2 * tau_max)
+onset_sample = int(((onset_times[0][0][0]*0.001) * Fs) - 20.)
+offset_sample = int(((onset_times[0][0][-1]*0.001) * Fs) - 20.)
 stimulus = stimulus[onset_sample:offset_sample]
 duration=(len(stimulus)/Fs)*1000. #ms
 
-test_onset_sample = int(((test_onset_times[0][0][0]*0.001) * Fs) - 2 * tau_max)
-test_offset_sample = int(((test_onset_times[0][0][1]*0.001) * Fs) - 2 * tau_max)
+# test_onset_sample = int(((test_onset_times[0][0][0]*0.001) * Fs) - 2 * tau_max)
+# test_offset_sample = int(((test_onset_times[0][0][1]*0.001) * Fs) - 2 * tau_max)
+test_onset_sample = int(((test_onset_times[0][0][0]*0.001) * Fs) - 20.)
+test_offset_sample = int(((test_onset_times[0][0][1]*0.001) * Fs) - 20.)
 test_stimulus = stimulus[test_onset_sample:test_offset_sample]
 test_duration = (len(test_stimulus)/Fs)*1000. #ms
 
@@ -153,7 +158,7 @@ plt.colorbar()
 plt.figure()
 plt.imshow(average_band_response_test,vmin=abs(average_band_response_test).min(), vmax=abs(average_band_response_test).max(), extent=[0, 1, 0, 1])
 plt.colorbar()
-plt.show()
+# plt.show()
 print "built average response matrices"
 lag_matrix = lag_matrix_generator(average_band_response,tau_max,duration,step=step)
 print "built lag matrix"
@@ -178,7 +183,11 @@ plt.plot(test_stimulus)
 # np.savez_compressed(input_directory+test_file+'_reverse_correlation_data.npz',original_stimulus=tone_1,
 #                    mapping_function=mapping_function,
 #                     reconstructed_stimulus = S_t)
-wavfile.write(input_directory+test_file+'_reconstruction_lag{}ms_step{}.wav'.format(tau_max_ms,step),rate=Fs,data=S_t)
+
+#normalise reconstruction
+norm_factor = ((2**15)-1.)/max(abs(S_t))
+S_t_norm = S_t * norm_factor
+wavfile.write(input_directory+test_file+'_reconstruction_lag{}ms_step{}.wav'.format(tau_max_ms,step),rate=Fs,data=S_t_norm)
 print "complete"
 plt.show()
 
