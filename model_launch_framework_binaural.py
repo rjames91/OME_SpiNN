@@ -176,15 +176,8 @@ def run_model(
 ##end for
 
     # Run the simulation
-
-    # if rt:
-    #     latency = 3 * (96. / fs)
-    #     duration = time_scale * 1000.*((data.size / fs) + latency)
-    # else:
-    #     latency = 3 * (10000e-6)
-    #     duration = 1000.*((10000e-6 * (data.size / 96.)) + latency)
     latency = 3 * (96. / fs)
-    duration = time_scale * 1000. * ((data.size / fs) + latency)
+    duration = 1000. * ((data.size / fs) + latency)
 
     g.transceiver().set_watch_dog(False)
     g.run(duration)
