@@ -6,15 +6,15 @@ import math
 from signal_prep import *
 from scipy.io import savemat, loadmat
 
-Fs = 100000.#24000.#34000.#44100.#22050.#
+Fs = 50e3#100000.#22050.#24000.#34000.#44100.#
 seg_size = 96
 bitfield = True#False#
 profile = False#True#
 psth = False
 resample_factor = 1.
-dBSPL = 60.
-sweep_duration = 0.1
+dBSPL = 30.
 
+sweep_duration = 0.1
 asc = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=dBSPL, duration=sweep_duration,
                             modulation_freq=0., fs=Fs, ramp_duration=0.0025, plt=None, silence=True,ascending=True)
 des = generate_signal(signal_type="sweep_tone", freq=[30, 8000], dBSPL=dBSPL, duration=sweep_duration,
@@ -112,8 +112,8 @@ while 1:
         break
 
 max_power = min([numpy.log10(Fs/2.),4.25])
-pole_freqs = numpy.logspace(1.477,max_power,300)#spectrum available given Fs nyquist limits
-
+# pole_freqs = [1000.,1000.]
+pole_freqs = numpy.logspace(numpy.log10(30),max_power,300)#spectrum available given Fs nyquist limits
 binaural_audio_data = []
 #check audio data can be divided evenly into 100 sample segements
 for ear in range(num_channels):
@@ -189,11 +189,12 @@ for ear in range(num_channels):
         binaural_scaled_times.append(scaled_times)
 
     else:
-        plt.figure("VRR output")
+        plt.figure("VRR output HSR")
         drnl_time = numpy.linspace(0,len(binaural_audio_data[ear])/Fs,len(binaural_audio_data[ear]))
-        x = numpy.linspace(0,1,len(drnl[1]))
-        plt.plot(x,drnl[1][:])
-        plt.plot(x,drnl[0][:])
+        x = numpy.linspace(0,duration,len(drnl[1]))
+        plt.plot(x,drnl[1+int(drnl.shape[0]/2)][:])
+        plt.figure("VRR output LSR")
+        plt.plot(x,drnl[int(drnl.shape[0]/2)][:])
         plt.xlim((0,1))
         print "max_lsr={}".format(numpy.max(drnl[0][:]))
         print "max_hsr={}".format(numpy.max(drnl[1][:]))
@@ -244,6 +245,6 @@ if profile:
 plt.figure("input audio")
 for channel in binaural_audio_data:
     t = numpy.linspace(0,duration,len(channel))
-    plt.plot(channel)
+    plt.plot(t,channel)
     plt.xlabel("time (s)")
 plt.show()
