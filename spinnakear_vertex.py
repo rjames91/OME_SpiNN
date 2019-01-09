@@ -2,9 +2,14 @@ from pacman.model.graphs.application.application_vertex import ApplicationVertex
 from spynnaker.pyNN.models.abstract_models.abstract_accepts_incoming_synapses import AbstractAcceptsIncomingSynapses
 from pacman.model.graphs.common.constrained_object import ConstrainedObject
 from pacman.model.decorators.overrides import overrides
+from pacman.model.resources.resource_container import ResourceContainer
+from pacman.model.resources.sdram_resource import SDRAMResource
+from pacman.model.resources.cpu_cycles_per_tick_resource import CPUCyclesPerTickResource
+from pacman.model.resources.dtcm_resource import DTCMResource
 
-from spinn_front_end_common.utilities import globals_variables
-from spinn_front_end_common.utilities import helpful_functions
+from spinn_front_end_common.utilities import globals_variables,helpful_functions
+from spinn_front_end_common.utilities import constants as front_end_common_constants
+
 
 from spinn_front_end_common.abstract_models \
     .abstract_generates_data_specification \
@@ -16,6 +21,11 @@ from spinn_front_end_common.abstract_models. \
     AbstractProvidesOutgoingPartitionConstraints
 from spynnaker.pyNN.models.common.simple_population_settable \
     import SimplePopulationSettable
+
+from OME_vertex import OMEVertex
+from DRNL_vertex import DRNLVertex
+from IHCAN_vertex import IHCANVertex
+from MCack_vertex import MCackVertex
 
 import numpy as np
 import math
@@ -35,7 +45,6 @@ command_partition_dict = {'ome':'OMECommand',
                           'mack':'MCackData'}
 
 def calculate_n_atoms(n_channels,n_ears,n_macks=4,n_ihcs=5):
-    n_atoms = 0
     #list indices correspond to atom index
     mv_index_list = []
     edge_index_list = []#each entry is a list of tuples containnig mv indices the mv connects to and the data partion name for the edge
@@ -46,77 +55,122 @@ def calculate_n_atoms(n_channels,n_ears,n_macks=4,n_ihcs=5):
         parent_index_list.append([])
         edge_index_list.append([])
 
-        n_drnls = n_channels
         #generate MCACK tree
         mack_edge_list=[]
         mack_mv_list = []
+        mack_parent_list = []
         n_mack_tree_rows = int(np.ceil(math.log(n_channels, n_macks)))
-        row_macks = range(n_drnls)
+        row_macks = range(ome_index+n_ihcs,n_channels*(n_ihcs+1)+ome_index+n_ihcs,n_ihcs+1)
         for _ in row_macks:
+            #Generate the corresponding IHC mv indices
+            for j in range(n_ihcs):
+                mack_mv_list.append('ihc')
+                mack_edge_list.append([])
+                mack_parent_list.append([])
             mack_mv_list.append('drnl')
             mack_edge_list.append([])
+            mack_parent_list.append([])
 
-        mack_count=0
         for k in range(n_mack_tree_rows):
             parents_look_up = []
             parents = []
-            for mack_index in row_macks:
+            for mack_index,mack in enumerate(row_macks):
                 parent_index = int(mack_index / n_macks)
-                if parent_index not in parents_look_up:
-                    if len(row_macks) <= n_macks:
-                        parent = ome
-                    else:
-                        parent = MCackVertex()
-                        g.add_machine_vertex_instance(parent)
-                    parents.append(parent)
+                if len(row_macks) <= n_macks:
+                    parent = ome_index
+                elif parent_index not in parents_look_up:
                     parents_look_up.append(parent_index)
+                    parent = ome_index+len(mack_mv_list)
+                    #create parent
+                    mack_mv_list.append('mack')
+                    mack_edge_list.append([])
+                    mack_parent_list.append([])
+                    parents.append(parent)
                 else:
                     parent = parents[parent_index]
 
-                parent.register_mack_processor(mack)
-                mack.register_parent_processor(parent)
-                # Add an edge to send r2s data
-                g.add_machine_edge_instance(
-                    MachineEdge(parent, mack),
-                    parent.command_partition_name)
-                # Add an edge to send ack
-                g.add_machine_edge_instance(
-                    MachineEdge(mack, parent),
-                    parent.acknowledge_partition_name)
+                # mack_parent_list[mack]=parent #will overwrite empty list initial value
+                mack_parent_list[mack].append(parent)
+                if parent == ome_index:
+                    # add parent index to mack edge entry
+                    mack_edge_list[mack].append((parent, acknowledge_partition_dict['ome']))
+                    # add mack index to parent edge entry
+                    edge_index_list[parent].append((mack, command_partition_dict['ome']))
+                else:
+                    # add parent index to mack edge entry
+                    mack_edge_list[mack].append((parent, acknowledge_partition_dict['mack']))
+                    # add mack index to parent edge entry
+                    mack_edge_list[parent-ome_index].append((mack, command_partition_dict['mack']))
+
 
             row_macks[:] = parents
-        #flip the order of the mack lists so it's bottom up (OME->DRNLs)
-        for entry in mack_edge_list.reverse():
-            edge_index_list.append(entry)
-        for entry in mack_mv_list.reverse():
+        #reverse the order of the mack lists so it's bottom up (OME->DRNLs)
+        mack_edge_list.reverse()
+
+        mc_list_offset = len(mv_index_list)
+        #reverse previously calculated indices in ome entry of the edge_index_list
+        ome_edges = edge_index_list[ome_index][:]
+        edge_index_list[ome_index]=[]
+        for(j,partition_name) in ome_edges:
+            rev_index = len(mack_mv_list)-1-j
+            edge_index_list[ome_index].append((mc_list_offset+rev_index,partition_name))
+        #add all previously calculated entries to the edge_index_list
+        for entry in mack_edge_list:
+            edge_index_list.append([])
+            for (j,partition_name) in entry:
+                if partition_name == 'OMEAck':
+                    edge_index_list[-1].append((ome_index,partition_name))
+                else:#reverse previously calculated indices in this list
+                    rev_index = len(mack_mv_list)-1-j
+                    rev_entry = (mc_list_offset+rev_index,partition_name)
+                    edge_index_list[-1].append(rev_entry)
+
+        mack_mv_list.reverse()
+        for entry in mack_mv_list:
             mv_index_list.append(entry)
+
+        mack_parent_list.reverse()
+        for i,entry in enumerate(mack_parent_list):
             parent_index_list.append([])
+            if len(entry)>0:
+                for ps in entry:
+                    if ps == ome_index:
+                        parent_index_list[-1].append(ps)
+                    else:
+                        parent_index_list[-1].append(mc_list_offset+len(mack_mv_list)-1-ps)
 
         #DRNLs should already be in the mv list so now we need to add the relevant ihc mvs
         drnl_indices = [i for i,j in enumerate(mv_index_list) if j=='drnl']
 
+        ihc_index = len(mv_index_list)
         for i in drnl_indices:
             # Add the data edges (OME->DRNLs) to the ome entry in the edge list
             edge_index_list[ome_index].append((i,data_partition_dict['ome']))
-            parent_index_list[i]=ome_index
+            parent_index_list[i].append(ome_index)
             #Generate the corresponding IHC mv indices
             for j in range(n_ihcs):
-                mv_index_list.append('ihc')
                 #add the IHC mv index to the DRNL edge list entries
-                edge_index_list[i]
-
+                edge_index_list[i].append((i+j+1,data_partition_dict['drnl']))
+                #add the DRNL index to the IHC edge list
+                edge_index_list[i+j+1].append((i,acknowledge_partition_dict['drnl']))
                 #add the drnl parent index to the ihc
+                parent_index_list[i+j+1].append(i)
 
+    #generate ihc seeds
+    n_ihcans = n_channels * n_ihcs
+    random_range = np.arange(n_ihcans * 4, dtype=np.uint32)
+    ihc_seeds = np.random.choice(random_range, int(n_ihcans * 4), replace=False)
+    return len(mv_index_list),mv_index_list,parent_index_list,edge_index_list,ihc_seeds
 
 #TODO: find out how we can constrain OMEs to ethernet chips
 
 class SpiNNakEarVertex(ApplicationVertex,
                        AbstractAcceptsIncomingSynapses,
-                       ConstrainedObject,
-                       AbstractGeneratesDataSpecification,
-                       AbstractHasAssociatedBinary,
-                       AbstractProvidesOutgoingPartitionConstraints,
-                       SimplePopulationSettable,
+                       # ConstrainedObject,
+                       # AbstractGeneratesDataSpecification,
+                       # AbstractHasAssociatedBinary,
+                       # AbstractProvidesOutgoingPartitionConstraints,
+                       # SimplePopulationSettable,
                        ):
     def __init__(
             self, n_neurons, audio_input,fs,n_channels,n_ears,
@@ -127,7 +181,15 @@ class SpiNNakEarVertex(ApplicationVertex,
             max_atoms_per_core, model):
         self._model_name = "SpikeSourceSpiNNakEar"
         self._model = model
-        self._n_atoms,self._mv_index_list,self._parent_index_list,self._edge_index_list = calculate_n_atoms(n_channels,n_ears)
+        self._n_atoms,self._mv_index_list,self._parent_index_list,\
+        self._edge_index_list,self._ihc_seeds = calculate_n_atoms(n_channels,n_ears)
+        self._audio_input = audio_input
+        self._fs = fs
+        self._n_channels = n_channels
+        self._n_ears = n_ears
+        self._ear_index = 0
+        self._sdram_resource_bytes = audio_input.dtype.itemsize * audio_input.size
+
         self._mv_list = []#append to each time create_machine_vertex is called
 
         config = globals_variables.get_simulator().config
@@ -138,9 +200,15 @@ class SpiNNakEarVertex(ApplicationVertex,
         if port is None:
             self._port = helpful_functions.read_config_int(
                 config, "Buffers", "receive_buffer_port")
+        self._time_scale_factor = helpful_functions.read_config_int(config,"Machine","time_scale_factor")
+        # Superclasses
+        ApplicationVertex.__init__(
+            self, label, constraints, self.n_atoms)
 
     # **HACK** for Projection to connect a synapse type is required
-    synapse_type = SpiNNakEarSynapseType()
+    # synapse_type = SpiNNakEarSynapseType()
+    def get_synapse_id_by_target(self, target):
+        return 0
 
     def set_synapse_dynamics(self, synapse_dynamics):
         pass
@@ -156,10 +224,60 @@ class SpiNNakEarVertex(ApplicationVertex,
     #
     # def requires_mapping(self):
     #     pass
+    def get_connections_from_machine(self, transceiver, placement, edge, graph_mapper,
+                                     routing_infos, synapse_information, machine_time_step):
 
+        super(SpiNNakEarVertex, self).get_connections_from_machine(transceiver, placement, edge,
+                                                           graph_mapper, routing_infos,
+                                                           synapse_information,
+                                                           machine_time_step)
     def clear_connection_cache(self):
         pass
 
+    @overrides(ApplicationVertex.get_resources_used_by_atoms)
+    def get_resources_used_by_atoms(self, vertex_slice):
+        # **HACK** only way to force no partitioning is to zero dtcm and cpu
+        container = ResourceContainer(
+            sdram=SDRAMResource(
+                self._sdram_resource_bytes +
+                front_end_common_constants.SYSTEM_BYTES_REQUIREMENT),
+            dtcm=DTCMResource(0),
+            cpu_cycles=CPUCyclesPerTickResource(0))
+
+        return container
+    # ------------------------------------------------------------------------
+    # AbstractHasAssociatedBinary overrides TODO: allow correct binary and start type to be chosen depending on slice atom index
+    # ------------------------------------------------------------------------
+    # @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
+    # def get_binary_file_name(self):
+    #     return "breakout.aplx"
+    #
+    # @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
+    # def get_binary_start_type(self):
+    #     # return ExecutableStartType.USES_SIMULATION_INTERFACE
+    #     return ExecutableType.USES_SIMULATION_INTERFACE
+
+    # ------------------------------------------------------------------------
+    # AbstractProvidesOutgoingPartitionConstraints overrides
+    # ------------------------------------------------------------------------
+    # @overrides(AbstractProvidesOutgoingPartitionConstraints.
+    #            get_outgoing_partition_constraints)
+    # def get_outgoing_partition_constraints(self, partition):
+    #     return [ContiguousKeyRangeContraint()]
+    #
+    # @property
+    # @overrides(AbstractChangableAfterRun.requires_mapping)
+    # def requires_mapping(self):
+    #     return self._change_requires_mapping
+    #
+    # @overrides(AbstractChangableAfterRun.mark_no_changes)
+    # def mark_no_changes(self):
+    #     self._change_requires_mapping = False
+
+    @overrides(SimplePopulationSettable.set_value)
+    def set_value(self, key, value):
+        SimplePopulationSettable.set_value(self, key, value)
+        self._change_requires_neuron_parameters_reload = True
     def describe(self):
         """ Returns a human-readable description of the cell or synapse type.
 
@@ -188,37 +306,54 @@ class SpiNNakEarVertex(ApplicationVertex,
             self, vertex_slice,
             resources_required,  # @UnusedVariable
             label=None, constraints=None):
-        send_buffer_times = self._send_buffer_times
-        if send_buffer_times is not None and len(send_buffer_times):
-            if hasattr(send_buffer_times[0], "__len__"):
-                send_buffer_times = send_buffer_times[
-                                    vertex_slice.lo_atom:vertex_slice.hi_atom + 1]
-        vertex = ReverseIPTagMulticastSourceMachineVertex(
-            n_keys=vertex_slice.n_atoms,
-            label=label, constraints=constraints,
-            board_address=self._board_address,
-            receive_port=self._receive_port,
-            receive_sdp_port=self._receive_sdp_port,
-            receive_tag=self._receive_tag,
-            receive_rate=self._receive_rate,
-            virtual_key=self._virtual_key, prefix=self._prefix,
-            prefix_type=self._prefix_type, check_keys=self._check_keys,
-            send_buffer_times=send_buffer_times,
-            send_buffer_partition_id=self._send_buffer_partition_id,
-            send_buffer_max_space=self._send_buffer_max_space,
-            send_buffer_space_before_notify=(
-                self._send_buffer_space_before_notify),
-            buffer_notification_ip_address=(
-                self._buffer_notification_ip_address),
-            buffer_notification_port=self._buffer_notification_port,
-            buffer_notification_tag=self._buffer_notification_tag,
-            reserve_reverse_ip_tag=self._reserve_reverse_ip_tag)
-        if self._record_buffer_size > 0:
-            vertex.enable_recording(
-                self._record_buffer_size,
-                self._record_buffer_size_before_receive,
-                self._record_time_between_requests)
+        # send_buffer_times = self._send_buffer_times
+        # if send_buffer_times is not None and len(send_buffer_times):
+        #     if hasattr(send_buffer_times[0], "__len__"):
+        #         send_buffer_times = send_buffer_times[
+        #                             vertex_slice.lo_atom:vertex_slice.hi_atom + 1]
+        #lookup relevant mv type, parent mv and edges associated with this atom
+        mv_type = self._mv_index_list[vertex_slice.lo_atom]
+        parent_mvs = self._parent_index_list[vertex_slice.lo_atom]
+        mv_edges = self._edge_index_list[vertex_slice.lo_atom]
+
+        if mv_type == 'ome':
+            vertex = OMEVertex(self._audio_input[self._ear_index], self._fs,self._n_channels,
+                               time_scale=self._time_scale_factor, profile=False)
+            for edge in mv_edges:
+                for (j,)
+            self._ear_index +=1
+
+        # vertex = ReverseIPTagMulticastSourceMachineVertex(
+        #     n_keys=vertex_slice.n_atoms,
+        #     label=label, constraints=constraints,
+        #     board_address=self._board_address,
+        #     receive_port=self._receive_port,
+        #     receive_sdp_port=self._receive_sdp_port,
+        #     receive_tag=self._receive_tag,
+        #     receive_rate=self._receive_rate,
+        #     virtual_key=self._virtual_key, prefix=self._prefix,
+        #     prefix_type=self._prefix_type, check_keys=self._check_keys,
+        #     send_buffer_times=send_buffer_times,
+        #     send_buffer_partition_id=self._send_buffer_partition_id,
+        #     send_buffer_max_space=self._send_buffer_max_space,
+        #     send_buffer_space_before_notify=(
+        #         self._send_buffer_space_before_notify),
+        #     buffer_notification_ip_address=(
+        #         self._buffer_notification_ip_address),
+        #     buffer_notification_port=self._buffer_notification_port,
+        #     buffer_notification_tag=self._buffer_notification_tag,
+        #     reserve_reverse_ip_tag=self._reserve_reverse_ip_tag)
+        # if self._record_buffer_size > 0:
+        #     vertex.enable_recording(
+        #         self._record_buffer_size,
+        #         self._record_buffer_size_before_receive,
+        #         self._record_time_between_requests)
         self._machine_vertices.append((vertex_slice, vertex))
+
+
+        #if vetex label is mack or if parent label is mack
+        # parent.register_mack_processor(mack)
+        # mack.register_parent_processor(parent)
         return vertex
 
     @property
