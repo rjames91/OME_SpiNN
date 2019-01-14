@@ -3,6 +3,7 @@ from spinn_utilities.overrides import overrides
 from spynnaker.pyNN.utilities import constants
 from spinnakear_vertex import SpiNNakEarVertex
 import numpy as np
+from spinn_utilities.executable_finder import ExecutableFinder
 
 _population_parameters = {
         'port': None, 'tag': None, 'ip_address': None, 'board_address': None,

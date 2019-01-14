@@ -8,11 +8,12 @@ from pacman.model.resources.cpu_cycles_per_tick_resource import CPUCyclesPerTick
 from pacman.model.resources.dtcm_resource import DTCMResource
 from pacman.model.constraints.partitioner_constraints.fixed_vertex_atoms_constraint import FixedVertexAtomsConstraint
 from pacman.model.graphs.machine.machine_edge import MachineEdge
-
+from pacman.model.constraints.placer_constraints import SameChipAsConstraint
 
 from spinn_front_end_common.utilities import globals_variables,helpful_functions
 from spinn_front_end_common.utilities import constants as front_end_common_constants
 
+from data_specification.enums.data_type import DataType
 
 from spinn_front_end_common.abstract_models \
     .abstract_generates_data_specification \
@@ -169,12 +170,19 @@ def calculate_n_atoms(n_channels,n_ears,n_macks=4,n_ihcs=5):
 
 class SpiNNakEarVertex(ApplicationVertex,
                        AbstractAcceptsIncomingSynapses,
+
                        # ConstrainedObject,
                        # AbstractGeneratesDataSpecification,
                        # AbstractHasAssociatedBinary,
                        # AbstractProvidesOutgoingPartitionConstraints,
                        # SimplePopulationSettable,
                        ):
+    # The data type of each data element
+    _DATA_ELEMENT_TYPE = DataType.FLOAT_64#DataType.FLOAT_32#
+    # The data type of the data count
+    _DATA_COUNT_TYPE = DataType.UINT32
+    # The data type of the keys
+    _KEY_ELEMENT_TYPE = DataType.UINT32
     def __init__(
             self, n_neurons, audio_input,fs,n_channels,n_ears,
             port, tag,   ip_address,board_address,
@@ -184,12 +192,16 @@ class SpiNNakEarVertex(ApplicationVertex,
             max_atoms_per_core, model):
         self._model_name = "SpikeSourceSpiNNakEar"
         self._model = model
-        self._n_atoms,self._mv_index_list,self._parent_index_list,\
-        self._edge_index_list,self._ihc_seeds = calculate_n_atoms(n_channels,n_ears)
         self._audio_input = audio_input
+        self._data_size = (
+            (self._audio_input.size * self._DATA_ELEMENT_TYPE.size) +
+            self._DATA_COUNT_TYPE.size
+        )
         self._fs = fs
         self._n_channels = n_channels
         self._n_ears = n_ears
+        self._n_mack = 4 #number of mack children per parent
+        self._n_ihc = 5 #number of ihcs per parent drnl
         self._ear_index = 0
         self._sdram_resource_bytes = audio_input.dtype.itemsize * audio_input.size
         self._todo_edges = []
@@ -214,6 +226,9 @@ class SpiNNakEarVertex(ApplicationVertex,
         ApplicationVertex.__init__(
             self, label, constraints, max_atoms_per_core)
 
+        self._n_atoms,self._mv_index_list,self._parent_index_list,\
+        self._edge_index_list,self._ihc_seeds = calculate_n_atoms(n_channels,n_ears,
+                                                                  n_macks=self._n_mack,n_ihcs=self._n_ihc)
 
     # **HACK** for Projection to connect a synapse type is required
     # synapse_type = SpiNNakEarSynapseType()
@@ -247,9 +262,23 @@ class SpiNNakEarVertex(ApplicationVertex,
     @overrides(ApplicationVertex.get_resources_used_by_atoms)
     def get_resources_used_by_atoms(self, vertex_slice):
         # **HACK** only way to force no partitioning is to zero dtcm and cpu
+        vertex_label = self._mv_index_list[vertex_slice.lo_atom]
+        if vertex_label == "ome":
+            sdram_resource_bytes = (9*4) + (6*8) + self._data_size
+            drnl_vertices = [i for i in self._mv_index_list if i == "drnl"]
+            sdram_resource_bytes += len(drnl_vertices) * self._KEY_ELEMENT_TYPE.size
+        elif vertex_label == "mack":
+            sdram_resource_bytes = 3*4
+        elif vertex_label == "drnl":
+            sdram_resource_bytes = 10*4
+            sdram_resource_bytes += self._n_ihc * self._KEY_ELEMENT_TYPE.size
+
+        else:#ihc
+            sdram_resource_bytes = 10*4 + 1 * self._KEY_ELEMENT_TYPE.size + self._data_size
+
         container = ResourceContainer(
             sdram=SDRAMResource(
-                self._sdram_resource_bytes +
+                sdram_resource_bytes +
                 front_end_common_constants.SYSTEM_BYTES_REQUIREMENT),
             dtcm=DTCMResource(0),
             cpu_cycles=CPUCyclesPerTickResource(0))
@@ -342,9 +371,6 @@ class SpiNNakEarVertex(ApplicationVertex,
                 #first parent will be ome
                 if parent_index == 0:
                     ome = self._mv_list[parent]
-                    #TODO: find out current chip placement - if there are enough cores left to build a drnl + all child ihcans then create, otherwise move to the next chip placement
-                    #don't think this is possible as we have no knowledge of the chip at this graph building stage
-                    #best solution is to use SDRAM edges between the DRNL and child IHCANs then when it comes to placement the same chip as constraint is implicit
                     vertex = DRNLVertex(ome,self._pole_freqs[self._pole_index],0.,profile=False)
                     self._pole_index +=1
                 else:#will be a mack vertex
@@ -352,11 +378,12 @@ class SpiNNakEarVertex(ApplicationVertex,
                     vertex.register_parent_processor(self._mv_list[parent])
         else:#ihcans
             for parent in parent_mvs:
-                #TODO: ensure placement is on the same chip as the parent DRNL
                 vertex = IHCANVertex(self._mv_list[parent], 1,
                                     self._ihc_seeds[self._seed_index:self._seed_index + 4],
                                     bitfield=True, profile=False)
                 self._seed_index += 4
+                # ensure placement is on the same chip as the parent DRNL
+                vertex.add_constraint(SameChipAsConstraint(self._mv_list[parent]))
 
         globals_variables.get_simulator().add_machine_vertex(vertex)
         for (j,partition_name) in mv_edges:
@@ -365,7 +392,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 self._todo_edges.append((vertex_slice.lo_atom,j,partition_name))
             else:
                 #add edge instance
-                globals_variables.get_simulator().add_machine_edge(MachineEdge(vertex,self._mv_list[j]),partition_name)
+                globals_variables.get_simulator().add_machine_edge(MachineEdge(vertex,self._mv_list[j],label="spinnakear"),partition_name)
 
         # vertex = ReverseIPTagMulticastSourceMachineVertex(
         #     n_keys=vertex_slice.n_atoms,
@@ -398,14 +425,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         if vertex_slice.lo_atom == self._n_atoms -1:
             #all vertices have been generated so add all incomplete edges
             for (source,target,partition_name) in self._todo_edges:
-                globals_variables.get_simulator().add_machine_edge(MachineEdge(self._mv_list[source],self._mv_list[target]),partition_name)
-
-
-
-
-        #if vetex label is mack or if parent label is mack
-        # parent.register_mack_processor(mack)
-        # mack.register_parent_processor(parent)
+                globals_variables.get_simulator().add_machine_edge(MachineEdge(self._mv_list[source],self._mv_list[target],label="spinnakear"),partition_name)
         return vertex
 
     @property
