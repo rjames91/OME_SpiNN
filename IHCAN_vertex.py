@@ -45,7 +45,7 @@ class IHCANVertex(
     """ A vertex that runs the DRNL algorithm
     """
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 10*4#
+    _N_PARAMETER_BYTES = 11*4#
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32#DataType.FLOAT_64
     # The data type of the data count
@@ -141,13 +141,14 @@ class IHCANVertex(
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
         "tags": "MemoryTags",
-        "placements": "MemoryPlacements"
+        "placements": "MemoryPlacements",
+        "machine_graph":"MemoryMachineGraph"
     })
     @overrides(
         AbstractGeneratesDataSpecification.generate_data_specification,
-        additional_arguments=["routing_info", "tags", "placements"])
+        additional_arguments=["routing_info", "tags", "placements","machine_graph"])
     def generate_data_specification(
-            self, spec, placement, routing_info, tags, placements):
+            self, spec, placement, routing_info, tags, placements,machine_graph):
 
         DRNL_placement=placements.get_placement_of_vertex(self._drnl).p
 
@@ -209,6 +210,18 @@ class IHCANVertex(
         #Write the sampling frequency
         spec.write_value(
             self._fs, data_type=self._COREID_TYPE)
+
+        #Write the routing key
+        partitions = machine_graph \
+            .get_outgoing_edge_partitions_starting_at_vertex(self)
+        for partition in partitions:
+            if partition.identifier == 'SPIKE':
+                rinfo = routing_info.get_routing_info_from_partition(
+                    partition)
+                key = rinfo.first_key
+                mask = rinfo.first_mask
+                spec.write_value(
+                   key, data_type=self._COREID_TYPE)
 
         #Write the seed
         data = numpy.array(self._seed, dtype=numpy.uint32)
