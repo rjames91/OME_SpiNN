@@ -170,7 +170,6 @@ def calculate_n_atoms(n_channels,n_ears,n_macks=4,n_ihcs=5):
 
 class SpiNNakEarVertex(ApplicationVertex,
                        AbstractAcceptsIncomingSynapses,
-
                        # ConstrainedObject,
                        # AbstractGeneratesDataSpecification,
                        # AbstractHasAssociatedBinary,
@@ -222,13 +221,22 @@ class SpiNNakEarVertex(ApplicationVertex,
             self._port = helpful_functions.read_config_int(
                 config, "Buffers", "receive_buffer_port")
         self._time_scale_factor = helpful_functions.read_config_int(config,"Machine","time_scale_factor")
-        # Superclasses
-        ApplicationVertex.__init__(
-            self, label, constraints, max_atoms_per_core)
-
+        if self._fs / self._time_scale_factor > 22050:
+            raise Exception("The input sampling frequency is too high for the chosen simulation time scale."
+                            "Please reduce Fs or increase the time scale factor in the config file")
         self._n_atoms,self._mv_index_list,self._parent_index_list,\
         self._edge_index_list,self._ihc_seeds = calculate_n_atoms(n_channels,n_ears,
                                                                   n_macks=self._n_mack,n_ihcs=self._n_ihc)
+        self._new_chip_indices = []
+        drnl_count = 0
+        for i,vertex_name in enumerate(self._mv_index_list):
+            if vertex_name == "drnl":
+                if drnl_count%2 == 0:
+                    self._new_chip_indices.append(i)
+                drnl_count+=1
+        # Superclasses
+        ApplicationVertex.__init__(
+            self, label, constraints, max_atoms_per_core)
 
     # **HACK** for Projection to connect a synapse type is required
     # synapse_type = SpiNNakEarSynapseType()

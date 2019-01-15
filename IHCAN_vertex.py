@@ -104,6 +104,7 @@ class IHCANVertex(
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES
         sdram += 1 * self._KEY_ELEMENT_TYPE.size
+        sdram += self._recording_size
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 

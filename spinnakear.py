@@ -39,7 +39,7 @@ class SpiNNakEar(AbstractPyNNModel):
             board_address, max_on_chip_memory_usage_for_spikes_in_bytes,
             space_before_notification, spike_recorder_buffer_size,
             buffer_size_before_receive):
-        max_atoms = 1#self.get_max_atoms_per_core()
+        max_atoms = 1
 
         return SpiNNakEarVertex(
             n_neurons,  self._audio_input,self._fs,self._n_channels,self._n_ears,
