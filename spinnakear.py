@@ -24,10 +24,9 @@ class SpiNNakEar(AbstractPyNNModel):
     def __init__(self, audio_input=np.asarray([]),fs=22050.,n_channels=3000):
         if isinstance(audio_input,list):
             audio_input = np.asarray(audio_input)
-        self._n_ears = audio_input.shape[0]
-        self._audio_input = []
-        for ear in range(self._n_ears):
-            self._audio_input.append(audio_input[ear][0:int(np.floor(len(audio_input[ear])/SEG_SIZE)*SEG_SIZE)])
+        if len(audio_input.shape)>1:
+            raise Exception("For binaural simulation please create separate SpiNNak-Ear populations (left/right)")
+        self._audio_input = audio_input[0:int(np.floor(len(audio_input)/SEG_SIZE)*SEG_SIZE)]
         self._audio_input=np.asarray(self._audio_input)
         self._fs = fs
         self._n_channels = n_channels
@@ -42,7 +41,7 @@ class SpiNNakEar(AbstractPyNNModel):
         max_atoms = 1
 
         return SpiNNakEarVertex(
-            n_neurons,  self._audio_input,self._fs,self._n_channels,self._n_ears,
+            n_neurons,  self._audio_input,self._fs,self._n_channels,
             port, tag, ip_address, board_address,
             max_on_chip_memory_usage_for_spikes_in_bytes,
             space_before_notification, constraints, label,
