@@ -227,6 +227,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._n_atoms,self._mv_index_list,self._parent_index_list,\
         self._edge_index_list,self._ihc_seeds = calculate_n_atoms(n_channels,n_ears,
                                                                   n_macks=self._n_mack,n_ihcs=self._n_ihc)
+        self._size = n_neurons
         self._new_chip_indices = []
         drnl_count = 0
         for i,vertex_name in enumerate(self._mv_index_list):
