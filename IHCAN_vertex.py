@@ -104,7 +104,7 @@ class IHCANVertex(
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES
         sdram += 1 * self._KEY_ELEMENT_TYPE.size
-        sdram += self._recording_size
+        # sdram += self._recording_size
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 
@@ -164,9 +164,9 @@ class IHCANVertex(
         spec.reserve_memory_region(self.REGIONS.PARAMETERS.value, region_size)
 
         #reserve recording region
-        spec.reserve_memory_region(
-            self.REGIONS.RECORDING.value,
-            recording_utilities.get_recording_header_size(1))
+        # spec.reserve_memory_region(
+        #     self.REGIONS.RECORDING.value,
+        #     recording_utilities.get_recording_header_size(1))
         if self._profile:
             #reserve profile region
             profile_utils.reserve_profile_region(
@@ -228,10 +228,10 @@ class IHCANVertex(
         spec.write_array(data.view(numpy.uint32))
 
         # Write the recording regions
-        spec.switch_write_focus(self.REGIONS.RECORDING.value)
-        ip_tags = tags.get_ip_tags_for_vertex(self) or []
-        spec.write_array(recording_utilities.get_recording_header_array(
-            [self._recording_size], ip_tags=ip_tags))
+        # spec.switch_write_focus(self.REGIONS.RECORDING.value)
+        # ip_tags = tags.get_ip_tags_for_vertex(self) or []
+        # spec.write_array(recording_utilities.get_recording_header_array(
+        #     [self._recording_size], ip_tags=ip_tags))
 
         #Write profile regions
         if self._profile:

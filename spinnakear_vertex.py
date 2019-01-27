@@ -2,16 +2,16 @@ from pacman.model.graphs.application.application_vertex import ApplicationVertex
 from spynnaker.pyNN.models.abstract_models.abstract_accepts_incoming_synapses import AbstractAcceptsIncomingSynapses
 from pacman.model.graphs.common.constrained_object import ConstrainedObject
 from pacman.model.decorators.overrides import overrides
-from pacman.model.resources.resource_container import ResourceContainer
-from pacman.model.resources.sdram_resource import SDRAMResource
-from pacman.model.resources.cpu_cycles_per_tick_resource import CPUCyclesPerTickResource
-from pacman.model.resources.dtcm_resource import DTCMResource
+from pacman.model.resources import ResourceContainer,SDRAMResource,CPUCyclesPerTickResource,ReverseIPtagResource,DTCMResource
 from pacman.model.constraints.partitioner_constraints.fixed_vertex_atoms_constraint import FixedVertexAtomsConstraint
 from pacman.model.graphs.machine.machine_edge import MachineEdge
 from pacman.model.constraints.placer_constraints import SameChipAsConstraint
 
 from spinn_front_end_common.utilities import globals_variables,helpful_functions
 from spinn_front_end_common.utilities import constants as front_end_common_constants
+from spinn_front_end_common.utilities.constants import (
+    DEFAULT_BUFFER_SIZE_BEFORE_RECEIVE, MAX_SIZE_OF_BUFFERED_REGION_ON_CHIP,
+    SDP_PORTS)
 
 from data_specification.enums.data_type import DataType
 
@@ -199,7 +199,7 @@ class SpiNNakEarVertex(ApplicationVertex,
             self._DATA_COUNT_TYPE.size
         )
         self._fs = fs
-        self._n_channels = n_channels
+        self._n_channels = int(n_channels)
         self._n_mack = 4 #number of mack children per parent
         self._n_ihc = 5 #number of ihcs per parent drnl
         self._sdram_resource_bytes = audio_input.dtype.itemsize * audio_input.size
@@ -225,7 +225,7 @@ class SpiNNakEarVertex(ApplicationVertex,
             raise Exception("The input sampling frequency is too high for the chosen simulation time scale."
                             "Please reduce Fs or increase the time scale factor in the config file")
         self._n_atoms,self._mv_index_list,self._parent_index_list,\
-        self._edge_index_list,self._ihc_seeds,self._ome_indices = calculate_n_atoms(n_channels,
+        self._edge_index_list,self._ihc_seeds,self._ome_indices = calculate_n_atoms(self._n_channels,
                                                                   n_macks=self._n_mack,n_ihcs=self._n_ihc)
         self._size = n_neurons
         self._new_chip_indices = []
@@ -276,14 +276,24 @@ class SpiNNakEarVertex(ApplicationVertex,
             sdram_resource_bytes = (9*4) + (6*8) + self._data_size
             drnl_vertices = [i for i in self._mv_index_list if i == "drnl"]
             sdram_resource_bytes += len(drnl_vertices) * self._KEY_ELEMENT_TYPE.size
+            # Live input parameters
+            reverse_iptags = [ReverseIPtagResource(
+                port=None, sdp_port=SDP_PORTS.INPUT_BUFFERING_SDP_PORT.value,
+                tag=None)]
+
         elif vertex_label == "mack":
             sdram_resource_bytes = 3*4
+            reverse_iptags = None
+
         elif vertex_label == "drnl":
             sdram_resource_bytes = 10*4
             sdram_resource_bytes += self._n_ihc * self._KEY_ELEMENT_TYPE.size
+            reverse_iptags = None
 
         else:#ihc
-            sdram_resource_bytes = 10*4 + 1 * self._KEY_ELEMENT_TYPE.size + self._data_size
+            sdram_resource_bytes = 10*4 + 1 * self._KEY_ELEMENT_TYPE.size #+ self._data_size
+            # sdram_resource_bytes = 10*4 + 1 * self._KEY_ELEMENT_TYPE.size + np.ceil(self._data_size/(self._DATA_ELEMENT_TYPE.size*8))
+            reverse_iptags = None
 
         container = ResourceContainer(
             sdram=SDRAMResource(
@@ -291,6 +301,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 front_end_common_constants.SYSTEM_BYTES_REQUIREMENT),
             dtcm=DTCMResource(0),
             cpu_cycles=CPUCyclesPerTickResource(0))
+            #,reverse_iptags=reverse_iptags)
 
         return container
     # ------------------------------------------------------------------------
