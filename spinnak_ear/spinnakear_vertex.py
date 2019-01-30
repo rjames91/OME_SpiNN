@@ -185,7 +185,7 @@ class SpiNNakEarVertex(ApplicationVertex,
     # The data type of the keys
     _KEY_ELEMENT_TYPE = DataType.UINT32
     def __init__(
-            self, n_neurons, audio_input,fs,n_channels,
+            self, n_neurons, audio_input,fs,n_channels,pole_freqs,
             port, tag,   ip_address,board_address,
             max_on_chip_memory_usage_for_spikes_in_bytes,
             space_before_notification, constraints, label,
@@ -207,8 +207,11 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._todo_mack_reg = []
 
         self._mv_list = []#append to each time create_machine_vertex is called
-        max_power = min([np.log10(self._fs/2.),4.25])
-        self._pole_freqs = np.logspace(np.log10(30),max_power,self._n_channels)
+        if pole_freqs is None:
+            max_power = min([np.log10(self._fs/2.),4.25])
+            self._pole_freqs = np.logspace(np.log10(30),max_power,self._n_channels)
+        else:
+            self._pole_freqs = pole_freqs
         self._seed_index = 0
         self._pole_index = 0
 
