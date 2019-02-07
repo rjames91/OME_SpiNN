@@ -56,6 +56,10 @@ class DRNLVertex(
     # the data type of the coreID
     _COREID_TYPE = DataType.UINT32
 
+    _KEY_MASK_ENTRY_DTYPE = [
+        ("key", "<u4"), ("mask", "<u4"),("conn_index","<u4")]
+    _KEY_MASK_ENTRY_SIZE_BYTES = 12
+
     PROFILE_TAG_LABELS = {
         0: "TIMER",
         1: "DMA_READ",
@@ -63,7 +67,7 @@ class DRNLVertex(
         3: "PROCESS_FIXED_SYNAPSES",
         4: "PROCESS_PLASTIC_SYNAPSES"}
 
-    def __init__(self, ome,CF,delay,profile=True,data_partition_name="DRNLData",
+    def __init__(self, ome,CF,delay,profile=True,drnl_index=None,data_partition_name="DRNLData",
             acknowledge_partition_name="DRNLDataAck"):
         """
 
@@ -77,10 +81,12 @@ class DRNLVertex(
         self._fs=ome.fs
         self._delay=int(delay)
         self._mack=ome
+        self._drnl_index = drnl_index
 
         self._ihcan_vertices = list()
         self._ihcan_placements = list()
         self._mask = list()
+        self._moc_vertices = list()
 
         self._num_data_points = ome.n_data_points
         self._data_size = (
@@ -110,6 +116,9 @@ class DRNLVertex(
         key = routing_info.get_first_key_from_pre_vertex(
             placement.vertex, self._acknowledge_partition_name)
         return key
+
+    def add_moc_vertex(self,vertex,conn_matrix):
+        self._moc_vertices.append((vertex,conn_matrix))
 
     @property
     def n_data_points(self):
@@ -179,9 +188,33 @@ class DRNLVertex(
 
         OME_placement=placements.get_placement_of_vertex(self._ome).p
 
+        n_moc_mvs = len(self._moc_vertices)
+        key_and_mask_table = numpy.zeros(n_moc_mvs, dtype=self._KEY_MASK_ENTRY_DTYPE)
+        conn_lut = []
+        for i,(moc,conn_matrix) in enumerate(self._moc_vertices):
+            key_and_mask = routing_info.get_routing_info_from_pre_vertex(moc,'SPIKE').first_key_and_mask
+            key_and_mask_table[i]['key']=key_and_mask.key
+            key_and_mask_table[i]['mask']=key_and_mask.mask
+            key_and_mask_table[i]['conn_index']=len(conn_lut)
+            for id in conn_matrix:
+                conn_lut.append(id.item())
+
+        conn_lut_size = int(numpy.ceil(len(conn_lut)/32.))
+
+        bitfield_conn_lut = numpy.zeros(conn_lut_size, dtype="uint32")
+        for step, j in enumerate(range(0, len(conn_lut), 32)):
+            lookup_bools = conn_lut[j:j + 32]
+            indices = numpy.nonzero(lookup_bools)[0]
+            for idx in indices:
+                bitfield_conn_lut[step] |= 1 << (31 - idx)
+
+        conn_lut_size_bytes = conn_lut_size*4
+        key_and_mask_table_size_bytes = key_and_mask_table.size * self._KEY_MASK_ENTRY_SIZE_BYTES
+
         # Reserve and write the parameters region
         region_size = self._N_PARAMETER_BYTES
         region_size += (1 + len(self._ihcan_vertices)) * self._KEY_ELEMENT_TYPE.size
+        region_size += conn_lut_size_bytes + key_and_mask_table_size_bytes + 2*self._KEY_ELEMENT_TYPE.size
         spec.reserve_memory_region(0, region_size)
         if self._profile:
             #reserve profile region
@@ -252,10 +285,16 @@ class DRNLVertex(
             self._ome, self._ome.data_partition_name)
         spec.write_value(ome_data_key, data_type=DataType.UINT32)
 
+        #Write the number of mocs
+        spec.write_value(n_moc_mvs)
         #Write the size of the conn LUT
+        spec.write_value(conn_lut_size)
+        # Write the arrays
+        spec.write_array(bitfield_conn_lut.view("uint32"))
+        spec.write_array(key_and_mask_table.view("<u4"))
+
         #self.get_spinnakear_master_pop_size()
         #Write the conn LUT
-
 
     #    print "DRNL OME placement=",OME_placement
    #     print "DRNL placement=",placement.p

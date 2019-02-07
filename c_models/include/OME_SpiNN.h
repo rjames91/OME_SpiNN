@@ -18,7 +18,7 @@
 #define MAX_COREID 16
 #define SEED_SEL_SIZE 1024
 
-#define SEGSIZE 96
+#define SEGSIZE 8//16//96//
 
 #define MAX_SIGNAL_S 1
 

@@ -69,9 +69,9 @@ Id,Preface,Original
 67,[INFO] (profiler.c: 17): ,Reading profile setup from 0x%08x
 68,[INFO] (profiler.c: 24): ,Initialising profiler with storage for %u samples starting at 0x%08x
 69,[INFO] (profiler.c: 39): ,Profiler wrote %u bytes to 0x%08x
-8001,[INFO] (SpiNNakEar_IHCAN.c: 255): ,IHCAN key=%d
-8002,[INFO] (SpiNNakEar_IHCAN.c: 256): ,data_size=%d
-8003,[INFO] (SpiNNakEar_IHCAN.c: 257): ,mask=%d
-8004,[INFO] (SpiNNakEar_IHCAN.c: 258): ,DRNL ID=%d
-8005,[INFO] (SpiNNakEar_IHCAN.c: 259): ,AN key=%d
-8006,[INFO] (SpiNNakEar_IHCAN.c: 277): ,seg output (in bytes)=%d\n
+10001,[INFO] (SpiNNakEar_IHCAN.c: 255): ,IHCAN key=%d
+10002,[INFO] (SpiNNakEar_IHCAN.c: 256): ,data_size=%d
+10003,[INFO] (SpiNNakEar_IHCAN.c: 257): ,mask=%d
+10004,[INFO] (SpiNNakEar_IHCAN.c: 258): ,DRNL ID=%d
+10005,[INFO] (SpiNNakEar_IHCAN.c: 259): ,AN key=%d
+10006,[INFO] (SpiNNakEar_IHCAN.c: 275): ,seg output (in bytes)=%d\n

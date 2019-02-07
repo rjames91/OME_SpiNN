@@ -392,7 +392,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 #first parent will be ome
                 if parent_index in self._ome_indices:
                     ome = self._mv_list[parent]
-                    vertex = DRNLVertex(ome,self._pole_freqs[self._pole_index],0.,profile=False)
+                    vertex = DRNLVertex(ome,self._pole_freqs[self._pole_index],0.,profile=False,drnl_index=self._pole_index)
                     self._pole_index +=1
                 else:#will be a mack vertex
                     self._mv_list[parent].register_mack_processor(vertex)
