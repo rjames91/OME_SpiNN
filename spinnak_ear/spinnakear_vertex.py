@@ -185,7 +185,7 @@ class SpiNNakEarVertex(ApplicationVertex,
     # The data type of the keys
     _KEY_ELEMENT_TYPE = DataType.UINT32
     def __init__(
-            self, n_neurons, audio_input,fs,n_channels,pole_freqs,
+            self, n_neurons, audio_input,fs,n_channels,pole_freqs,param_file,
             port, tag,   ip_address,board_address,
             max_on_chip_memory_usage_for_spikes_in_bytes,
             space_before_notification, constraints, label,
@@ -227,9 +227,21 @@ class SpiNNakEarVertex(ApplicationVertex,
         if self._fs / self._time_scale_factor > 22050:
             raise Exception("The input sampling frequency is too high for the chosen simulation time scale."
                             "Please reduce Fs or increase the time scale factor in the config file")
-        self._n_atoms,self._mv_index_list,self._parent_index_list,\
-        self._edge_index_list,self._ihc_seeds,self._ome_indices = calculate_n_atoms(self._n_channels,
+        try:
+            pre_gen_vars = np.load(param_file)
+            self._n_atoms=pre_gen_vars['n_atoms']
+            self._mv_index_list=pre_gen_vars['mv_index_list']
+            self._parent_index_list=pre_gen_vars['parent_index_list']
+            self._edge_index_list=pre_gen_vars['edge_index_list']
+            self._ihc_seeds=pre_gen_vars['ihc_seeds']
+            self._ome_indices=pre_gen_vars['ome_indices']
+
+        except:
+            self._n_atoms,self._mv_index_list,self._parent_index_list,\
+            self._edge_index_list,self._ihc_seeds,self._ome_indices = calculate_n_atoms(self._n_channels,
                                                                   n_macks=self._n_mack,n_ihcs=self._n_ihc)
+            self.save_pre_gen_vars(param_file)
+
         self._size = n_neurons
         self._new_chip_indices = []
         drnl_count = 0
@@ -242,8 +254,6 @@ class SpiNNakEarVertex(ApplicationVertex,
         ApplicationVertex.__init__(
             self, label, constraints, max_atoms_per_core)
 
-    # **HACK** for Projection to connect a synapse type is required
-    # synapse_type = SpiNNakEarSynapseType()
     def get_synapse_id_by_target(self, target):
         return 0
 
@@ -255,6 +265,11 @@ class SpiNNakEarVertex(ApplicationVertex,
 
     def add_pre_run_connection_holder(self, connection_holder, projection_edge, synapse_information):
         super(SpiNNakEarVertex, self).add_pre_run_connection_holder(connection_holder, projection_edge, synapse_information)
+
+    def save_pre_gen_vars(self,filepath):
+        np.savez_compressed(filepath,
+                            n_atoms=self._n_atoms,mv_index_list=self._mv_index_list, parent_index_list= self._parent_index_list,
+                            edge_index_list=self._edge_index_list,ihc_seeds=self._ihc_seeds,ome_indices=self._ome_indices)
 
     # def get_binary_start_type(self):
     #     super(SpiNNakEarVertex, self).get_binary_start_type()
