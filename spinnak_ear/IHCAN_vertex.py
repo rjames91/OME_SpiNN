@@ -32,6 +32,8 @@ from spinn_front_end_common.interface.simulation import simulation_utilities
 from spinn_front_end_common.interface.profiling.profile_data \
     import ProfileData
 
+from spinn_front_end_common.abstract_models import AbstractRecordable
+from spinn_front_end_common.utilities import globals_variables
 
 from enum import Enum
 import numpy
@@ -40,7 +42,8 @@ class IHCANVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
         AbstractProvidesNKeysForPartition,
-        AbstractHasProfileData
+        AbstractHasProfileData,
+        AbstractRecordable
         ):
     """ A vertex that runs the DRNL algorithm
     """
@@ -71,11 +74,24 @@ class IHCANVertex(
                ('RECORDING', 2),
                ('PROFILE', 3)])
 
-    def __init__(self, drnl,resample_factor,seed,bitfield=True,profile=True):#TODO:add Fs to params
+    def __init__(self, drnl,resample_factor,seed,is_recording, minimum_buffer_sdram,
+            buffered_sdram_per_timestep,spike_recorder,buffer_size_before_receive,
+                 max_spikes_per_ts,maximum_sdram_for_buffering,ear_index=0,bitfield=True,profile=True):#TODO:add Fs to params
         """
         :param ome: The connected ome vertex    """
+
         MachineVertex.__init__(self, label="IHCAN Node", constraints=None)
         AbstractProvidesNKeysForPartition.__init__(self)
+        AbstractRecordable.__init__(self)
+        self._is_recording = is_recording
+        self._minimum_buffer_sdram = minimum_buffer_sdram
+        self._buffered_sdram_per_timestep = buffered_sdram_per_timestep
+        self._spike_recorder = spike_recorder
+        self._buffer_size_before_receive = buffer_size_before_receive
+        self._max_spikes_per_ts = max_spikes_per_ts
+        self._maximum_sdram_for_buffering = maximum_sdram_for_buffering
+        self._ear_index = ear_index
+
         self._drnl = drnl
         self._drnl.register_processor(self)
         self._resample_factor=resample_factor
@@ -98,6 +114,19 @@ class IHCANVertex(
         self._bitfield = bitfield
         self._profile = profile
         self._process_profile_times = None
+
+        config = globals_variables.get_simulator().config
+
+        self._time_between_requests = config.getint(
+            "Buffers", "time_between_requests")
+        self._receive_buffer_host = config.get(
+            "Buffers", "receive_buffer_host")
+        self._receive_buffer_port = helpful_functions.read_config_int(
+            config, "Buffers", "receive_buffer_port")
+        self._minimum_buffer_sdram = config.getint(
+            "Buffers", "minimum_buffer_sdram")
+        self._using_auto_pause_and_resume = config.getboolean(
+            "Buffers", "use_auto_pause_and_resume")
 
     @property
     @overrides(MachineVertex.resources_required)
@@ -142,13 +171,17 @@ class IHCANVertex(
         "routing_info": "MemoryRoutingInfos",
         "tags": "MemoryTags",
         "placements": "MemoryPlacements",
-        "machine_graph":"MemoryMachineGraph"
+        "machine_graph":"MemoryMachineGraph",
+        "n_machine_time_steps": "TotalMachineTimeSteps",
+        "machine_time_step": "MachineTimeStep",
     })
     @overrides(
         AbstractGeneratesDataSpecification.generate_data_specification,
-        additional_arguments=["routing_info", "tags", "placements","machine_graph"])
+        additional_arguments=["routing_info", "tags", "placements","machine_graph"
+                              ,"n_machine_time_steps","graph_mapper","machine_time_step"])
     def generate_data_specification(
-            self, spec, placement, routing_info, tags, placements,machine_graph):
+            self, spec, placement, routing_info, tags, placements,machine_graph,
+            n_machine_time_steps,machine_time_step):
 
         DRNL_placement=placements.get_placement_of_vertex(self._drnl).p
 
@@ -164,9 +197,9 @@ class IHCANVertex(
         spec.reserve_memory_region(self.REGIONS.PARAMETERS.value, region_size)
 
         #reserve recording region
-        # spec.reserve_memory_region(
-        #     self.REGIONS.RECORDING.value,
-        #     recording_utilities.get_recording_header_size(1))
+        spec.reserve_memory_region(
+            self.REGIONS.RECORDING.value,
+            recording_utilities.get_recording_header_size(1))
         if self._profile:
             #reserve profile region
             profile_utils.reserve_profile_region(
@@ -232,6 +265,18 @@ class IHCANVertex(
         # ip_tags = tags.get_ip_tags_for_vertex(self) or []
         # spec.write_array(recording_utilities.get_recording_header_array(
         #     [self._recording_size], ip_tags=ip_tags))
+        # write recording data
+        ip_tags = tags.get_ip_tags_for_vertex(self) or []
+        spec.switch_write_focus(self.REGIONS.RECORDING.value)
+        recorded_region_sizes = recording_utilities.get_recorded_region_sizes(
+            [self._spike_recorder.get_sdram_usage_in_bytes(
+                2, self._max_spikes_per_ts(
+                    n_machine_time_steps, machine_time_step),
+                n_machine_time_steps)],
+            self._maximum_sdram_for_buffering)
+        spec.write_array(recording_utilities.get_recording_header_array(
+            recorded_region_sizes, self._time_between_requests,
+            self._buffer_size_before_receive, ip_tags))
 
         #Write profile regions
         if self._profile:
@@ -274,13 +319,33 @@ class IHCANVertex(
         #return formatted_data
         return output_data
 
-    def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
-        return recording_utilities.get_n_timesteps_in_buffer_space(
-            buffer_space, 4)
+    # def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
+    #     return recording_utilities.get_n_timesteps_in_buffer_space(
+    #         buffer_space, 4)
+    #
+    # def get_recorded_region_ids(self):
+    #     return [0]
 
-    def get_recorded_region_ids(self):
-        return [0]
-
+    @overrides(AbstractReceiveBuffersToHost.get_recording_region_base_address)
     def get_recording_region_base_address(self, txrx, placement):
         return helpful_functions.locate_memory_region_for_placement(
             placement, self.REGIONS.RECORDING.value, txrx)
+
+    @overrides(AbstractRecordable.is_recording)
+    def is_recording(self):
+        return self._is_recording
+
+    @overrides(AbstractReceiveBuffersToHost.get_minimum_buffer_sdram_usage)
+    def get_minimum_buffer_sdram_usage(self):
+        return self._minimum_buffer_sdram
+
+    @overrides(AbstractReceiveBuffersToHost.get_n_timesteps_in_buffer_space)
+    def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
+        return recording_utilities.get_n_timesteps_in_buffer_space(
+            buffer_space, [self._buffered_sdram_per_timestep])
+
+    @overrides(AbstractReceiveBuffersToHost.get_recorded_region_ids)
+    def get_recorded_region_ids(self):
+        if self._is_recording:
+            return [0]
+        return []

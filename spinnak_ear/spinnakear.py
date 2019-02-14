@@ -21,7 +21,7 @@ SEG_SIZE = 96
 class SpiNNakEar(AbstractPyNNModel):
     default_population_parameters = _population_parameters
 
-    def __init__(self, audio_input=np.asarray([]),fs=22050.,n_channels=3000,pole_freqs=None,param_file=None):
+    def __init__(self, audio_input=np.asarray([]),fs=22050.,n_channels=3000,pole_freqs=None,param_file=None,ear_index=0):
         if isinstance(audio_input,list):
             audio_input = np.asarray(audio_input)
         if len(audio_input.shape)>1:
@@ -32,6 +32,7 @@ class SpiNNakEar(AbstractPyNNModel):
         self._n_channels = n_channels
         self._pole_freqs = pole_freqs
         self._param_file=param_file
+        self._ear_index=ear_index
 
     @overrides(AbstractPyNNModel.create_vertex,
                additional_arguments=_population_parameters.keys())
@@ -43,7 +44,7 @@ class SpiNNakEar(AbstractPyNNModel):
         max_atoms = 1
 
         self._vertex = SpiNNakEarVertex(
-            n_neurons,  self._audio_input,self._fs,self._n_channels,self._pole_freqs,self._param_file,
+            n_neurons,  self._audio_input,self._fs,self._n_channels,self._pole_freqs,self._param_file,self._ear_index,
             port, tag, ip_address, board_address,
             max_on_chip_memory_usage_for_spikes_in_bytes,
             space_before_notification, constraints, label,
