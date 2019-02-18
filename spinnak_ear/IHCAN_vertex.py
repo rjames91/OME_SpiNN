@@ -76,7 +76,7 @@ class IHCANVertex(
 
     def __init__(self, drnl,resample_factor,seed,is_recording, minimum_buffer_sdram,
             buffered_sdram_per_timestep,spike_recorder,buffer_size_before_receive,
-                 max_spikes_per_ts,maximum_sdram_for_buffering,ear_index=0,bitfield=True,profile=True):#TODO:add Fs to params
+                 max_spikes_per_ts,maximum_sdram_for_buffering,n_fibres=2,ear_index=0,bitfield=True,profile=True):#TODO:add Fs to params
         """
         :param ome: The connected ome vertex    """
 
@@ -96,7 +96,8 @@ class IHCANVertex(
         self._drnl.register_processor(self)
         self._resample_factor=resample_factor
         self._fs=drnl.fs
-        self._num_data_points = 2 * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
+        self._n_atoms = n_fibres
+        self._num_data_points = n_fibres * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
         if bitfield:
             self._recording_size = numpy.ceil(float(self._num_data_points * self._DATA_ELEMENT_TYPE.size)/(self._DATA_ELEMENT_TYPE.size*8))
         else:
@@ -196,15 +197,15 @@ class IHCANVertex(
         region_size += 1 * self._KEY_ELEMENT_TYPE.size
         spec.reserve_memory_region(self.REGIONS.PARAMETERS.value, region_size)
 
-        #reserve recording region
-        spec.reserve_memory_region(
-            self.REGIONS.RECORDING.value,
-            recording_utilities.get_recording_header_size(1))
-        if self._profile:
-            #reserve profile region
-            profile_utils.reserve_profile_region(
-                spec, self.REGIONS.PROFILE.value,
-                self._n_profile_samples)
+        # #reserve recording region
+        # spec.reserve_memory_region(
+        #     self.REGIONS.RECORDING.value,
+        #     recording_utilities.get_recording_header_size(1))
+        # if self._profile:
+        #     #reserve profile region
+        #     profile_utils.reserve_profile_region(
+        #         spec, self.REGIONS.PROFILE.value,
+        #         self._n_profile_samples)
 
         # simulation.c requirements
         spec.switch_write_focus(self.REGIONS.SYSTEM.value)
@@ -248,7 +249,7 @@ class IHCANVertex(
         partitions = machine_graph \
             .get_outgoing_edge_partitions_starting_at_vertex(self)
         for partition in partitions:
-            if partition.identifier == 'SPIKE':
+            if partition.identifier == 'AN':
                 rinfo = routing_info.get_routing_info_from_partition(
                     partition)
                 key = rinfo.first_key
@@ -266,17 +267,18 @@ class IHCANVertex(
         # spec.write_array(recording_utilities.get_recording_header_array(
         #     [self._recording_size], ip_tags=ip_tags))
         # write recording data
-        ip_tags = tags.get_ip_tags_for_vertex(self) or []
-        spec.switch_write_focus(self.REGIONS.RECORDING.value)
-        recorded_region_sizes = recording_utilities.get_recorded_region_sizes(
-            [self._spike_recorder.get_sdram_usage_in_bytes(
-                2, self._max_spikes_per_ts(
-                    n_machine_time_steps, machine_time_step),
-                n_machine_time_steps)],
-            self._maximum_sdram_for_buffering)
-        spec.write_array(recording_utilities.get_recording_header_array(
-            recorded_region_sizes, self._time_between_requests,
-            self._buffer_size_before_receive, ip_tags))
+
+        # ip_tags = tags.get_ip_tags_for_vertex(self) or []
+        # spec.switch_write_focus(self.REGIONS.RECORDING.value)
+        # recorded_region_sizes = recording_utilities.get_recorded_region_sizes(
+        #     [self._spike_recorder.get_sdram_usage_in_bytes(
+        #         2, self._max_spikes_per_ts(
+        #             n_machine_time_steps, machine_time_step),
+        #         n_machine_time_steps)],
+        #     self._maximum_sdram_for_buffering)
+        # spec.write_array(recording_utilities.get_recording_header_array(
+        #     recorded_region_sizes, self._time_between_requests,
+        #     self._buffer_size_before_receive, ip_tags))
 
         #Write profile regions
         if self._profile:

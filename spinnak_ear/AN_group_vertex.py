@@ -1,0 +1,129 @@
+from pacman.model.graphs.machine import MachineVertex
+from pacman.model.resources.resource_container import ResourceContainer
+from pacman.model.resources.dtcm_resource import DTCMResource
+from pacman.model.resources.sdram_resource import SDRAMResource
+from pacman.model.resources.cpu_cycles_per_tick_resource \
+    import CPUCyclesPerTickResource
+from pacman.model.decorators.overrides import overrides
+from pacman.executor.injection_decorator import inject_items
+
+from data_specification.enums.data_type import DataType
+
+from spinn_front_end_common.abstract_models.abstract_has_associated_binary \
+    import AbstractHasAssociatedBinary
+from spinn_front_end_common.abstract_models\
+    .abstract_generates_data_specification \
+    import AbstractGeneratesDataSpecification
+from spinn_front_end_common.utilities.utility_objs import ExecutableType
+
+import numpy
+
+from spinn_front_end_common.abstract_models\
+    .abstract_provides_n_keys_for_partition \
+    import AbstractProvidesNKeysForPartition
+import numpy as np
+
+class ANGroupVertex(
+        MachineVertex, AbstractHasAssociatedBinary,
+        AbstractGeneratesDataSpecification,
+        # AbstractProvidesNKeysForPartition
+        ):
+    """ A vertex that runs the multi-cast acknowledge algorithm
+    """
+    # The data type of the keys
+    _KEY_ELEMENT_TYPE = DataType.UINT32
+    _KEY_MASK_ENTRY_DTYPE = [
+        ("key", "<u4"), ("mask", "<u4"),("n_atoms", "<u4")]
+    _KEY_MASK_ENTRY_SIZE_BYTES = 12
+    _N_PARAMETER_BYTES = 3 * 4
+
+    def __init__(self,child_vertices=[],max_n_atoms=256):
+        """
+
+        :param ome: The connected ome vertex
+        """
+        MachineVertex.__init__(self, label="AN Group Node", constraints=None)
+        # AbstractProvidesNKeysForPartition.__init__(self)
+        self._child_vertices = child_vertices
+        self._n_atoms = len(child_vertices)*2 #TODO:find out how to make this recognised by tools for key/mask gen
+        self._max_n_atoms = max_n_atoms
+
+    def add_child_vertex(self,child):
+        self._child_vertices.append(child)
+
+    @property
+    @overrides(MachineVertex.resources_required)
+    def resources_required(self):
+        sdram = self._N_PARAMETER_BYTES + len(self._child_vertices) * self._KEY_MASK_ENTRY_SIZE_BYTES
+
+        resources = ResourceContainer(
+            dtcm=DTCMResource(0),
+            sdram=SDRAMResource(sdram),
+            cpu_cycles=CPUCyclesPerTickResource(0),
+            iptags=[], reverse_iptags=[])
+        return resources
+
+    @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
+    def get_binary_file_name(self):
+        return "SpiNNakEar_ANGroup.aplx"
+
+    @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
+    def get_binary_start_type(self):
+        return ExecutableType.SYNC
+
+    # @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
+    # def get_n_keys_for_partition(self, partition, graph_mapper):
+    #     return 256#for control IDs
+
+    @inject_items({
+        "routing_info": "MemoryRoutingInfos",
+        "tags": "MemoryTags",
+        "placements": "MemoryPlacements",
+        "machine_graph":"MemoryMachineGraph",
+    })
+
+    @overrides(
+        AbstractGeneratesDataSpecification.generate_data_specification,
+        additional_arguments=["routing_info", "tags", "placements","machine_graph"])
+    def generate_data_specification(
+            self, spec, placement, routing_info, tags, placements,machine_graph):
+
+        # Reserve and write the parameters region
+        region_size = self._N_PARAMETER_BYTES + len(self._child_vertices) * self._KEY_MASK_ENTRY_SIZE_BYTES
+        spec.reserve_memory_region(0, region_size)
+        spec.switch_write_focus(0)
+
+        #Write the number of child nodes
+        spec.write_value(len(self._child_vertices),data_type=self._KEY_ELEMENT_TYPE)
+
+        #Write the routing key
+        partitions = machine_graph \
+            .get_outgoing_edge_partitions_starting_at_vertex(self)
+        if len(partitions)==0:
+            #write 0 key
+            spec.write_value(0)
+            #write false is_key
+            spec.write_value(0)
+        for partition in partitions:
+            if partition.identifier == 'SPIKE':
+                rinfo = routing_info.get_routing_info_from_partition(
+                    partition)
+                key = rinfo.first_key
+                mask = rinfo.first_mask
+                spec.write_value(
+                   key, data_type=self._KEY_ELEMENT_TYPE)
+                #write true is_key
+                spec.write_value(1)
+
+        #key and mask table generation
+        key_and_mask_table = numpy.zeros(len(self._child_vertices), dtype=self._KEY_MASK_ENTRY_DTYPE)
+        for i,vertex in enumerate(self._child_vertices):
+            key_and_mask = routing_info.get_routing_info_from_pre_vertex(vertex,'AN').first_key_and_mask
+            key_and_mask_table[i]['key']=key_and_mask.key
+            key_and_mask_table[i]['mask']=key_and_mask.mask
+            key_and_mask_table[i]['n_atoms']=vertex._n_atoms
+
+        spec.write_array(key_and_mask_table.view("<u4"))
+        # End the specification
+        spec.end_specification()
+

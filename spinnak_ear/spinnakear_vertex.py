@@ -38,6 +38,7 @@ from spinnak_ear.OME_vertex import OMEVertex
 from spinnak_ear.DRNL_vertex import DRNLVertex
 from spinnak_ear.IHCAN_vertex import IHCANVertex
 from spinnak_ear.MCack_vertex import MCackVertex
+from spinnak_ear.AN_group_vertex import ANGroupVertex
 
 import numpy as np
 import math
@@ -59,126 +60,6 @@ data_partition_dict = {'drnl': 'DRNLData',
 command_partition_dict = {'ome':'OMECommand',
                           'mack':'MCackData'}
 
-def calculate_n_atoms(n_channels,n_macks=4,n_ihcs=5):
-    #list indices correspond to atom index
-    mv_index_list = []
-    edge_index_list = []#each entry is a list of tuples containnig mv indices the mv connects to and the data partion name for the edge
-    parent_index_list = [] #each entry is the ID of the parent vertex - used to obtain parent spike IDs
-    ome_indices = []
-    ome_index = len(mv_index_list)
-    ome_indices.append(ome_index)
-    mv_index_list.append('ome')
-    parent_index_list.append([])
-    edge_index_list.append([])
-
-    #generate MCACK tree
-    mack_edge_list= list()
-    mack_mv_list = list()
-    mack_parent_list = list()
-    n_mack_tree_rows = int(np.ceil(math.log(n_channels, n_macks)))
-    row_macks = range(n_ihcs,n_channels*(n_ihcs+1)+n_ihcs,n_ihcs+1)
-    for _ in row_macks:
-        #Generate the corresponding IHC mv indices
-        for j in range(n_ihcs):
-            mack_mv_list.append('ihc')
-            mack_edge_list.append([])
-            mack_parent_list.append([])
-        mack_mv_list.append('drnl')
-        mack_edge_list.append([])
-        mack_parent_list.append([])
-
-    for k in range(n_mack_tree_rows):
-        parents_look_up = []
-        parents = []
-        for mack_index,mack in enumerate(row_macks):
-            parent_index = int(mack_index / n_macks)
-            if len(row_macks) <= n_macks:
-                parent = ome_index
-            elif parent_index not in parents_look_up:
-                parents_look_up.append(parent_index)
-                # parent = ome_index+len(mack_mv_list)
-                parent = len(mack_mv_list)
-                #create parent
-                mack_mv_list.append('mack')
-                mack_edge_list.append([])
-                mack_parent_list.append([])
-                parents.append(parent)
-            else:
-                parent = parents[parent_index]
-
-            # mack_parent_list[mack]=parent #will overwrite empty list initial value
-            try:
-                mack_parent_list[mack].append(parent)
-            except IndexError:
-                print "index error"
-            if parent == ome_index:
-                # add parent index to mack edge entry
-                mack_edge_list[mack].append((parent, acknowledge_partition_dict['ome']))
-                # add mack index to parent edge entry
-                edge_index_list[parent].append((mack, command_partition_dict['ome']))
-            else:
-                # add parent index to mack edge entry
-                mack_edge_list[mack].append((parent, acknowledge_partition_dict['mack']))
-                # add mack index to parent edge entry
-                mack_edge_list[parent-ome_index].append((mack, command_partition_dict['mack']))
-
-        row_macks[:] = parents
-    #reverse the order of the mack lists so it's bottom up (OME->DRNLs)
-    mack_edge_list.reverse()
-
-    mc_list_offset = len(mv_index_list)
-    #reverse previously calculated indices in ome entry of the edge_index_list
-    ome_edges = edge_index_list[ome_index][:]
-    edge_index_list[ome_index]=[]
-    for(j,partition_name) in ome_edges:
-        rev_index = len(mack_mv_list)-1-j
-        edge_index_list[ome_index].append((mc_list_offset+rev_index,partition_name))
-    #add all previously calculated entries to the edge_index_list
-    for entry in mack_edge_list:
-        edge_index_list.append([])
-        for (j,partition_name) in entry:
-            if partition_name == 'OMEAck':
-                edge_index_list[-1].append((ome_index,partition_name))
-            else:#reverse previously calculated indices in this list
-                rev_index = len(mack_mv_list)-1-j
-                rev_entry = (mc_list_offset+rev_index,partition_name)
-                edge_index_list[-1].append(rev_entry)
-
-    mack_mv_list.reverse()
-    for entry in mack_mv_list:
-        mv_index_list.append(entry)
-
-    mack_parent_list.reverse()
-    for i,entry in enumerate(mack_parent_list):
-        parent_index_list.append([])
-        if len(entry)>0:
-            for ps in entry:
-                if ps == ome_index:
-                    parent_index_list[-1].append(ps)
-                else:
-                    parent_index_list[-1].append(mc_list_offset+len(mack_mv_list)-1-ps)
-
-    #DRNLs should already be in the mv list so now we need to add the relevant ihc mvs
-    drnl_indices = [i for i,j in enumerate(mv_index_list) if j=='drnl']
-    for i in drnl_indices:
-        # Add the data edges (OME->DRNLs) to the ome entry in the edge list
-        edge_index_list[ome_index].append((i,data_partition_dict['ome']))
-        parent_index_list[i].append(ome_index)
-        #Generate the corresponding IHC mv indices
-        for j in range(n_ihcs):
-            #add the IHC mv index to the DRNL edge list entries
-            edge_index_list[i].append((i+j+1,data_partition_dict['drnl']))
-            #add the DRNL index to the IHC edge list
-            edge_index_list[i+j+1].append((i,acknowledge_partition_dict['drnl']))
-            #add the drnl parent index to the ihc
-            parent_index_list[i+j+1].append(i)
-
-    #generate ihc seeds
-    n_ihcans = n_channels * n_ihcs
-    random_range = np.arange(n_ihcans * 4, dtype=np.uint32)
-    ihc_seeds = np.random.choice(random_range, int(n_ihcans * 4), replace=False)
-    return len(mv_index_list),mv_index_list,parent_index_list,edge_index_list,ihc_seeds,ome_indices
-
 #TODO: find out how we can constrain OMEs to ethernet chips
 
 class SpiNNakEarVertex(ApplicationVertex,
@@ -199,6 +80,8 @@ class SpiNNakEarVertex(ApplicationVertex,
 
     SPIKE_RECORDING_REGION_ID = 0
     _N_POPULATION_RECORDING_REGIONS = 1
+    _MAX_N_ATOMS_PER_CORE = 16#256
+    _N_FIBRES_PER_IHCAN = 2
 
     def __init__(
             self, n_neurons, audio_input,fs,n_channels,pole_freqs,param_file,ear_index,
@@ -256,7 +139,7 @@ class SpiNNakEarVertex(ApplicationVertex,
 
         except:
             self._n_atoms,self._mv_index_list,self._parent_index_list,\
-            self._edge_index_list,self._ihc_seeds,self._ome_indices = calculate_n_atoms(self.n_channels,
+            self._edge_index_list,self._ihc_seeds,self._ome_indices = self.calculate_n_atoms(self.n_channels,
                                                                   n_macks=self._n_mack,n_ihcs=self._n_ihc)
             if self.param_file is not None:
                 self.save_pre_gen_vars(self.param_file)
@@ -359,10 +242,14 @@ class SpiNNakEarVertex(ApplicationVertex,
             sdram_resource_bytes += self._n_ihc * self._KEY_ELEMENT_TYPE.size
             reverse_iptags = None
 
-        else:#ihc
+        elif vertex_label == "ihc":
             sdram_resource_bytes = 10*4 + 1 * self._KEY_ELEMENT_TYPE.size #+ self._data_size
             # sdram_resource_bytes = 10*4 + 1 * self._KEY_ELEMENT_TYPE.size + np.ceil(self._data_size/(self._DATA_ELEMENT_TYPE.size*8))
             reverse_iptags = None
+        else:#angroup
+            child_vertices = [self._mv_list[vertex_index] for vertex_index in self._parent_index_list[vertex_slice.lo_atom]]
+            n_child_keys = len(child_vertices)
+            sdram_resource_bytes = 3*4 + 12 * n_child_keys
 
         container = ResourceContainer(
             sdram=SDRAMResource(
@@ -468,7 +355,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                     vertex.register_parent_processor(self._mv_list[parent])
             vertex.add_constraint(EarConstraint())
 
-        else:#ihcans
+        elif mv_type == 'ihc':
             for parent in parent_mvs:
                 buffered_sdram_per_timestep = \
                     self._spike_recorder.get_sdram_usage_in_bytes(
@@ -485,17 +372,23 @@ class SpiNNakEarVertex(ApplicationVertex,
                 # ensure placement is on the same chip as the parent DRNL
                 vertex.add_constraint(SameChipAsConstraint(self._mv_list[parent]))
 
+        else:#an_group
+            child_vertices = [self._mv_list[vertex_index] for vertex_index in parent_mvs]
+            vertex = ANGroupVertex(child_vertices,max_n_atoms = self._MAX_N_ATOMS_PER_CORE)
+            # vertex.add_constraint(SameChipAsConstraint(child_vertices[0]))
+
         globals_variables.get_simulator().add_machine_vertex(vertex)
-        for (j,partition_name) in mv_edges:
-            if j>vertex_slice.lo_atom: # vertex not already built
-                #add to the "to build" edge list
-                self._todo_edges.append((vertex_slice.lo_atom,j,partition_name))
-            else:
-                #add edge instance
-                try:
-                    globals_variables.get_simulator().add_machine_edge(MachineEdge(vertex,self._mv_list[j],label="spinnakear"),partition_name)
-                except IndexError:
-                    print
+        if len(mv_edges)>0:
+            for (j,partition_name) in mv_edges:
+                if j>vertex_slice.lo_atom: # vertex not already built
+                    #add to the "to build" edge list
+                    self._todo_edges.append((vertex_slice.lo_atom,j,partition_name))
+                else:
+                    #add edge instance
+                    try:
+                        globals_variables.get_simulator().add_machine_edge(MachineEdge(vertex,self._mv_list[j],label="spinnakear"),partition_name)
+                    except IndexError:
+                        print
 
         # vertex = ReverseIPTagMulticastSourceMachineVertex(
         #     n_keys=vertex_slice.n_atoms,
@@ -580,3 +473,138 @@ class SpiNNakEarVertex(ApplicationVertex,
             logger.warning("indexes not supported for "
                            "SpikeSourcePoisson so being ignored")
         self._spike_recorder.record = new_state
+
+    def calculate_n_atoms(self,n_channels, n_macks=4, n_ihcs=5):
+        # list indices correspond to atom index
+        mv_index_list = []
+        edge_index_list = []  # each entry is a list of tuples containnig mv indices the mv connects to and the data partion name for the edge
+        parent_index_list = []  # each entry is the ID of the parent vertex - used to obtain parent spike IDs
+        ome_indices = []
+        ome_index = len(mv_index_list)
+        ome_indices.append(ome_index)
+        mv_index_list.append('ome')
+        parent_index_list.append([])
+        edge_index_list.append([])
+
+        # generate MCACK tree
+        mack_edge_list = list()
+        mack_mv_list = list()
+        mack_parent_list = list()
+        n_mack_tree_rows = int(np.ceil(math.log(n_channels, n_macks)))
+        row_macks = range(n_ihcs, n_channels * (n_ihcs + 1) + n_ihcs, n_ihcs + 1)
+        for _ in row_macks:
+            # Generate the corresponding IHC mv indices
+            for j in range(n_ihcs):
+                mack_mv_list.append('ihc')
+                mack_edge_list.append([])
+                mack_parent_list.append([])
+            mack_mv_list.append('drnl')
+            mack_edge_list.append([])
+            mack_parent_list.append([])
+
+        for k in range(n_mack_tree_rows):
+            parents_look_up = []
+            parents = []
+            for mack_index, mack in enumerate(row_macks):
+                parent_index = int(mack_index / n_macks)
+                if len(row_macks) <= n_macks:
+                    parent = ome_index
+                elif parent_index not in parents_look_up:
+                    parents_look_up.append(parent_index)
+                    # parent = ome_index+len(mack_mv_list)
+                    parent = len(mack_mv_list)
+                    # create parent
+                    mack_mv_list.append('mack')
+                    mack_edge_list.append([])
+                    mack_parent_list.append([])
+                    parents.append(parent)
+                else:
+                    parent = parents[parent_index]
+
+                # mack_parent_list[mack]=parent #will overwrite empty list initial value
+                try:
+                    mack_parent_list[mack].append(parent)
+                except IndexError:
+                    print "index error"
+                if parent == ome_index:
+                    # add parent index to mack edge entry
+                    mack_edge_list[mack].append((parent, acknowledge_partition_dict['ome']))
+                    # add mack index to parent edge entry
+                    edge_index_list[parent].append((mack, command_partition_dict['ome']))
+                else:
+                    # add parent index to mack edge entry
+                    mack_edge_list[mack].append((parent, acknowledge_partition_dict['mack']))
+                    # add mack index to parent edge entry
+                    mack_edge_list[parent - ome_index].append((mack, command_partition_dict['mack']))
+
+            row_macks[:] = parents
+        # reverse the order of the mack lists so it's bottom up (OME->DRNLs)
+        mack_edge_list.reverse()
+
+        mc_list_offset = len(mv_index_list)
+        # reverse previously calculated indices in ome entry of the edge_index_list
+        ome_edges = edge_index_list[ome_index][:]
+        edge_index_list[ome_index] = []
+        for (j, partition_name) in ome_edges:
+            rev_index = len(mack_mv_list) - 1 - j
+            edge_index_list[ome_index].append((mc_list_offset + rev_index, partition_name))
+        # add all previously calculated entries to the edge_index_list
+        for entry in mack_edge_list:
+            edge_index_list.append([])
+            for (j, partition_name) in entry:
+                if partition_name == 'OMEAck':
+                    edge_index_list[-1].append((ome_index, partition_name))
+                else:  # reverse previously calculated indices in this list
+                    rev_index = len(mack_mv_list) - 1 - j
+                    rev_entry = (mc_list_offset + rev_index, partition_name)
+                    edge_index_list[-1].append(rev_entry)
+
+        mack_mv_list.reverse()
+        for entry in mack_mv_list:
+            mv_index_list.append(entry)
+
+        mack_parent_list.reverse()
+        for i, entry in enumerate(mack_parent_list):
+            parent_index_list.append([])
+            if len(entry) > 0:
+                for ps in entry:
+                    if ps == ome_index:
+                        parent_index_list[-1].append(ps)
+                    else:
+                        parent_index_list[-1].append(mc_list_offset + len(mack_mv_list) - 1 - ps)
+
+        # DRNLs should already be in the mv list so now we need to add the relevant ihc mvs
+        drnl_indices = [i for i, j in enumerate(mv_index_list) if j == 'drnl']
+        for i in drnl_indices:
+            # Add the data edges (OME->DRNLs) to the ome entry in the edge list
+            edge_index_list[ome_index].append((i, data_partition_dict['ome']))
+            parent_index_list[i].append(ome_index)
+            # Generate the corresponding IHC mv indices
+            for j in range(n_ihcs):
+                # add the IHC mv index to the DRNL edge list entries
+                edge_index_list[i].append((i + j + 1, data_partition_dict['drnl']))
+                # add the DRNL index to the IHC edge list
+                edge_index_list[i + j + 1].append((i, acknowledge_partition_dict['drnl']))
+                # add the drnl parent index to the ihc
+                parent_index_list[i + j + 1].append(i)
+
+        # generate ihc seeds
+        n_ihcans = n_channels * n_ihcs
+        random_range = np.arange(n_ihcans * 4, dtype=np.uint32)
+        ihc_seeds = np.random.choice(random_range, int(n_ihcans * 4), replace=False)
+
+        # now add on the AN Group vertices
+        n_ihcans_per_group = int(self._MAX_N_ATOMS_PER_CORE/self._N_FIBRES_PER_IHCAN)
+        n_angs = int(np.ceil(float(n_ihcans) / n_ihcans_per_group))
+        ihc_an_indices = [i for i, label in enumerate(mv_index_list) if label == "ihc"]
+        for an in range(n_angs):
+            mv_index_list.append("group")
+            edge_index_list.append([])
+            ang_index = len(mv_index_list) - 1
+            # find child ihcans
+            child_indices = ihc_an_indices[an * n_ihcans_per_group:an * n_ihcans_per_group + n_ihcans_per_group]
+            parent_index_list.append(child_indices)
+            for i in child_indices:
+                edge_index_list[i].append((ang_index, 'AN'))
+
+        return len(mv_index_list), mv_index_list, parent_index_list, edge_index_list, ihc_seeds, ome_indices
