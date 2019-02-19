@@ -239,7 +239,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 tag=None)]
 
         elif vertex_label == "mack":
-            sdram_resource_bytes = 3*4
+            sdram_resource_bytes = 2*4
             reverse_iptags = None
 
         elif vertex_label == "drnl":

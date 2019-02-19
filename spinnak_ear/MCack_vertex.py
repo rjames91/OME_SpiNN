@@ -30,7 +30,7 @@ class MCackVertex(
     """ A vertex that runs the multi-cast acknowledge algorithm
     """
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 3*4
+    _N_PARAMETER_BYTES = 2*4
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
