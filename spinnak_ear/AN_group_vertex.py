@@ -26,27 +26,26 @@ import numpy as np
 class ANGroupVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
-        # AbstractProvidesNKeysForPartition
         ):
     """ A vertex that runs the multi-cast acknowledge algorithm
     """
     # The data type of the keys
     _KEY_ELEMENT_TYPE = DataType.UINT32
     _KEY_MASK_ENTRY_DTYPE = [
-        ("key", "<u4"), ("mask", "<u4"),("n_atoms", "<u4")]
+        ("key", "<u4"), ("mask", "<u4"),("offset", "<u4")]
     _KEY_MASK_ENTRY_SIZE_BYTES = 12
-    _N_PARAMETER_BYTES = 3 * 4
+    _N_PARAMETER_BYTES = 4 * 4
 
-    def __init__(self,child_vertices=[],max_n_atoms=256):
+    def __init__(self,child_vertices=[],max_n_atoms=256,is_final_row=False):
         """
-
-        :param ome: The connected ome vertex
         """
         MachineVertex.__init__(self, label="AN Group Node", constraints=None)
-        # AbstractProvidesNKeysForPartition.__init__(self)
         self._child_vertices = child_vertices
-        self._n_atoms = len(child_vertices)*2 #TODO:find out how to make this recognised by tools for key/mask gen
+        self._n_atoms = 0
+        for child in self._child_vertices:
+            self._n_atoms += child._n_atoms
         self._max_n_atoms = max_n_atoms
+        self._is_final_row = is_final_row
 
     def add_child_vertex(self,child):
         self._child_vertices.append(child)
@@ -70,10 +69,6 @@ class ANGroupVertex(
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
         return ExecutableType.SYNC
-
-    # @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
-    # def get_n_keys_for_partition(self, partition, graph_mapper):
-    #     return 256#for control IDs
 
     @inject_items({
         "routing_info": "MemoryRoutingInfos",
@@ -105,7 +100,7 @@ class ANGroupVertex(
             #write false is_key
             spec.write_value(0)
         for partition in partitions:
-            if partition.identifier == 'SPIKE':
+            if partition.identifier == 'SPIKE' or partition.identifier == 'AN':
                 rinfo = routing_info.get_routing_info_from_partition(
                     partition)
                 key = rinfo.first_key
@@ -114,15 +109,20 @@ class ANGroupVertex(
                    key, data_type=self._KEY_ELEMENT_TYPE)
                 #write true is_key
                 spec.write_value(1)
-
+        #write is final
+        spec.write_value(self._is_final_row,data_type=self._KEY_ELEMENT_TYPE)
         #key and mask table generation
         key_and_mask_table = numpy.zeros(len(self._child_vertices), dtype=self._KEY_MASK_ENTRY_DTYPE)
+        offset = 0
         for i,vertex in enumerate(self._child_vertices):
             key_and_mask = routing_info.get_routing_info_from_pre_vertex(vertex,'AN').first_key_and_mask
             key_and_mask_table[i]['key']=key_and_mask.key
             key_and_mask_table[i]['mask']=key_and_mask.mask
-            key_and_mask_table[i]['n_atoms']=vertex._n_atoms
+            key_and_mask_table[i]['offset']=offset
+            offset+=vertex._n_atoms
 
+        # sort entries by key
+        key_and_mask_table.sort(order='key')
         spec.write_array(key_and_mask_table.view("<u4"))
         # End the specification
         spec.end_specification()

@@ -329,6 +329,9 @@ void app_end(uint null_a,uint null_b)
             spin1_delay_us(1);
         }
         final_ack=1;
+//        //ROB HACK TO REMOVE SECOND ACKS
+//        spin1_exit(0);
+//        io_printf (IO_BUF, "spinn_exit %\n");
     }
 }
 //DMA read
@@ -383,7 +386,6 @@ void data_read(uint null_a, uint null_b)
 	    }
 	}
     else if (read_ticks>=TOTAL_TICKS && sync_count==num_macks) read_ticks++;//additional latency wait
-
 }
 
 void process_chan(REAL *in_buffer)

@@ -80,7 +80,7 @@ class SpiNNakEarVertex(ApplicationVertex,
 
     SPIKE_RECORDING_REGION_ID = 0
     _N_POPULATION_RECORDING_REGIONS = 1
-    _MAX_N_ATOMS_PER_CORE = 16#256
+    _MAX_N_ATOMS_PER_CORE = 2#256
     _N_FIBRES_PER_IHCAN = 2
 
     def __init__(
@@ -106,6 +106,11 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._todo_edges = []
         self._todo_mack_reg = []
         self._ear_index=ear_index
+        self._n_group_tree_rows = int(np.ceil(math.log((n_channels*10)/self._N_FIBRES_PER_IHCAN, self._MAX_N_ATOMS_PER_CORE)))
+        self._max_n_atoms_per_group_tree_row = (self._MAX_N_ATOMS_PER_CORE ** np.arange(1,self._n_group_tree_rows+1)) * self._N_FIBRES_PER_IHCAN
+        self._max_n_atoms_per_group_tree_row = self._max_n_atoms_per_group_tree_row[self._max_n_atoms_per_group_tree_row < 256]
+        self._n_group_tree_rows = self._max_n_atoms_per_group_tree_row.size
+
 
         self._mv_list = []#append to each time create_machine_vertex is called
         if pole_freqs is None:
@@ -139,7 +144,7 @@ class SpiNNakEarVertex(ApplicationVertex,
 
         except:
             self._n_atoms,self._mv_index_list,self._parent_index_list,\
-            self._edge_index_list,self._ihc_seeds,self._ome_indices = self.calculate_n_atoms(self.n_channels,
+            self._edge_index_list,self._ihc_seeds,self._ome_indices = self.calculate_n_atoms(self.n_channels,self._n_group_tree_rows,
                                                                   n_macks=self._n_mack,n_ihcs=self._n_ihc)
             if self.param_file is not None:
                 self.save_pre_gen_vars(self.param_file)
@@ -249,7 +254,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         else:#angroup
             child_vertices = [self._mv_list[vertex_index] for vertex_index in self._parent_index_list[vertex_slice.lo_atom]]
             n_child_keys = len(child_vertices)
-            sdram_resource_bytes = 3*4 + 12 * n_child_keys
+            sdram_resource_bytes = 4*4 + 12 * n_child_keys
 
         container = ResourceContainer(
             sdram=SDRAMResource(
@@ -319,11 +324,6 @@ class SpiNNakEarVertex(ApplicationVertex,
             resources_required,n_machine_time_steps,
             machine_time_step,  # @UnusedVariable
             label=None, constraints=None):
-        # send_buffer_times = self._send_buffer_times
-        # if send_buffer_times is not None and len(send_buffer_times):
-        #     if hasattr(send_buffer_times[0], "__len__"):
-        #         send_buffer_times = send_buffer_times[
-        #                             vertex_slice.lo_atom:vertex_slice.hi_atom + 1]
         #lookup relevant mv type, parent mv and edges associated with this atom
         mv_type = self._mv_index_list[vertex_slice.lo_atom]
         parent_mvs = self._parent_index_list[vertex_slice.lo_atom]
@@ -374,8 +374,16 @@ class SpiNNakEarVertex(ApplicationVertex,
 
         else:#an_group
             child_vertices = [self._mv_list[vertex_index] for vertex_index in parent_mvs]
-            vertex = ANGroupVertex(child_vertices,max_n_atoms = self._MAX_N_ATOMS_PER_CORE)
-            # vertex.add_constraint(SameChipAsConstraint(child_vertices[0]))
+            row_index = int(mv_type[-1])
+            max_n_atoms = self._max_n_atoms_per_group_tree_row[row_index]
+
+            if len(mv_edges)==0:
+                #final row AN group
+                is_final_row = True
+            else:
+                is_final_row = False
+
+            vertex = ANGroupVertex(child_vertices,max_n_atoms = max_n_atoms,is_final_row=is_final_row)
 
         globals_variables.get_simulator().add_machine_vertex(vertex)
         if len(mv_edges)>0:
@@ -390,32 +398,6 @@ class SpiNNakEarVertex(ApplicationVertex,
                     except IndexError:
                         print
 
-        # vertex = ReverseIPTagMulticastSourceMachineVertex(
-        #     n_keys=vertex_slice.n_atoms,
-        #     label=label, constraints=constraints,
-        #     board_address=self._board_address,
-        #     receive_port=self._receive_port,
-        #     receive_sdp_port=self._receive_sdp_port,
-        #     receive_tag=self._receive_tag,
-        #     receive_rate=self._receive_rate,
-        #     virtual_key=self._virtual_key, prefix=self._prefix,
-        #     prefix_type=self._prefix_type, check_keys=self._check_keys,
-        #     send_buffer_times=send_buffer_times,
-        #     send_buffer_partition_id=self._send_buffer_partition_id,
-        #     send_buffer_max_space=self._send_buffer_max_space,
-        #     send_buffer_space_before_notify=(
-        #         self._send_buffer_space_before_notify),
-        #     buffer_notification_ip_address=(
-        #         self._buffer_notification_ip_address),
-        #     buffer_notification_port=self._buffer_notification_port,
-        #     buffer_notification_tag=self._buffer_notification_tag,
-        #     reserve_reverse_ip_tag=self._reserve_reverse_ip_tag)
-        # if self._record_buffer_size > 0:
-        #     vertex.enable_recording(
-        #         self._record_buffer_size,
-        #         self._record_buffer_size_before_receive,
-        #         self._record_time_between_requests)
-        # self._machine_vertices.append((vertex_slice, vertex))
         self._mv_list.append(vertex)
 
         if vertex_slice.lo_atom == self._n_atoms -1:
@@ -474,7 +456,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                            "SpikeSourcePoisson so being ignored")
         self._spike_recorder.record = new_state
 
-    def calculate_n_atoms(self,n_channels, n_macks=4, n_ihcs=5):
+    def calculate_n_atoms(self,n_channels,n_group_tree_rows, n_macks=4, n_ihcs=5):
         # list indices correspond to atom index
         mv_index_list = []
         edge_index_list = []  # each entry is a list of tuples containnig mv indices the mv connects to and the data partion name for the edge
@@ -511,7 +493,6 @@ class SpiNNakEarVertex(ApplicationVertex,
                     parent = ome_index
                 elif parent_index not in parents_look_up:
                     parents_look_up.append(parent_index)
-                    # parent = ome_index+len(mack_mv_list)
                     parent = len(mack_mv_list)
                     # create parent
                     mack_mv_list.append('mack')
@@ -521,7 +502,6 @@ class SpiNNakEarVertex(ApplicationVertex,
                 else:
                     parent = parents[parent_index]
 
-                # mack_parent_list[mack]=parent #will overwrite empty list initial value
                 try:
                     mack_parent_list[mack].append(parent)
                 except IndexError:
@@ -529,13 +509,9 @@ class SpiNNakEarVertex(ApplicationVertex,
                 if parent == ome_index:
                     # add parent index to mack edge entry
                     mack_edge_list[mack].append((parent, acknowledge_partition_dict['ome']))
-                    # add mack index to parent edge entry
-                    edge_index_list[parent].append((mack, command_partition_dict['ome']))
                 else:
                     # add parent index to mack edge entry
                     mack_edge_list[mack].append((parent, acknowledge_partition_dict['mack']))
-                    # add mack index to parent edge entry
-                    mack_edge_list[parent - ome_index].append((mack, command_partition_dict['mack']))
 
             row_macks[:] = parents
         # reverse the order of the mack lists so it's bottom up (OME->DRNLs)
@@ -579,6 +555,8 @@ class SpiNNakEarVertex(ApplicationVertex,
             # Add the data edges (OME->DRNLs) to the ome entry in the edge list
             edge_index_list[ome_index].append((i, data_partition_dict['ome']))
             parent_index_list[i].append(ome_index)
+            #Add the r2s edges from OME to DRNL
+            edge_index_list[ome_index].append((i, command_partition_dict['ome']))
             # Generate the corresponding IHC mv indices
             for j in range(n_ihcs):
                 # add the IHC mv index to the DRNL edge list entries
@@ -594,17 +572,29 @@ class SpiNNakEarVertex(ApplicationVertex,
         ihc_seeds = np.random.choice(random_range, int(n_ihcans * 4), replace=False)
 
         # now add on the AN Group vertices
-        n_ihcans_per_group = int(self._MAX_N_ATOMS_PER_CORE/self._N_FIBRES_PER_IHCAN)
-        n_angs = int(np.ceil(float(n_ihcans) / n_ihcans_per_group))
-        ihc_an_indices = [i for i, label in enumerate(mv_index_list) if label == "ihc"]
-        for an in range(n_angs):
-            mv_index_list.append("group")
-            edge_index_list.append([])
-            ang_index = len(mv_index_list) - 1
-            # find child ihcans
-            child_indices = ihc_an_indices[an * n_ihcans_per_group:an * n_ihcans_per_group + n_ihcans_per_group]
-            parent_index_list.append(child_indices)
-            for i in child_indices:
-                edge_index_list[i].append((ang_index, 'AN'))
+        n_child_per_group = self._MAX_N_ATOMS_PER_CORE#4#int(128./)
+        n_angs = n_ihcans
+
+        for row_index in range(n_group_tree_rows):
+            n_row_angs = int(np.ceil(float(n_angs) / n_child_per_group))
+            if row_index>0:
+                ang_indices = [i for i, label in enumerate(mv_index_list) if label == "inter_{}".format(row_index-1)]
+            else:
+                ang_indices = [i for i, label in enumerate(mv_index_list) if label == "ihc"]
+            for an in range(n_row_angs):
+                if row_index==n_group_tree_rows-1:
+                    mv_index_list.append("group_{}".format(row_index))
+                else:
+                    mv_index_list.append("inter_{}".format(row_index))
+                edge_index_list.append([])
+                ang_index = len(mv_index_list) - 1
+                # find child ihcans
+                child_indices = ang_indices[an * n_child_per_group:an * n_child_per_group + n_child_per_group]
+                parent_index_list.append(child_indices)
+                for i in child_indices:
+                    edge_index_list[i].append((ang_index, 'AN'))
+                #Add r2s connection from OME node
+                edge_index_list[ome_index].append((ang_index, command_partition_dict['ome']))
+            n_angs = n_row_angs
 
         return len(mv_index_list), mv_index_list, parent_index_list, edge_index_list, ihc_seeds, ome_indices

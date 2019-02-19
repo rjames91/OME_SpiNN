@@ -28,7 +28,6 @@ uint chipID;
 // The parameters to be read from memory
 enum params {
     PARENT_KEY,
-    CHILD_KEY,
     NUM_CHILDREN
     };
 
@@ -51,14 +50,11 @@ void app_init(void)
 
     //get parent key
     parent_key=params[PARENT_KEY];
-    //get child key
-    child_key=params[CHILD_KEY];
     //get number of children
     num_children=params[NUM_CHILDREN];
 
     log_info("num_child nodes:%d",num_children);
     log_info("parent key:%d",parent_key);
-    log_info("child key:%d",child_key);
 
     mask=3;
     final_ack=0;
@@ -97,14 +93,6 @@ void sync_check(uint mc_key, uint null)
 
 }
 
-void r2s_forward(uint mc_key, uint null)
-{
-    while (!spin1_send_mc_packet(child_key|1, 0, WITH_PAYLOAD))
-    {
-        spin1_delay_us(1);
-    }
-}
-
 void app_done ()
 {
   // report simulation time
@@ -126,7 +114,6 @@ void c_main()
 
   //setup callbacks
   spin1_callback_on (MC_PACKET_RECEIVED,sync_check,-1);
-  spin1_callback_on (MCPL_PACKET_RECEIVED,r2s_forward,-1);
 
   spin1_start (SYNC_WAIT);
   

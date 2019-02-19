@@ -123,28 +123,9 @@ class MCackVertex(
         spec.reserve_memory_region(0, region_size)
         spec.switch_write_focus(0)
 
-        # Get the placement of the vertices and find out how many chips
-        # are needed
-        keys = list()
-        for vertex in self._child_vertices:
-            child_placement = placements.get_placement_of_vertex(vertex)
-            self._child_placements.append(child_placement)
-            key = routing_info.get_first_key_from_pre_vertex(
-                vertex, self._acknowledge_partition_name)
-            keys.append(key)
-        keys.sort()
-
         # Write the Parent key
         spec.write_value(self._parent.get_acknowledge_key(
             placement, routing_info))
-
-        # Write the child key
-        if len(keys)>0:
-            command_key = routing_info.get_first_key_from_pre_vertex(
-                self, self._command_partition_name)
-            spec.write_value(command_key, data_type=DataType.UINT32)
-        else:
-            raise Exception("no mack key generated!")
 
         # Write number of child nodes
         spec.write_value(

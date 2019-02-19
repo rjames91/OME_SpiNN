@@ -91,3 +91,4 @@ Id,Preface,Original
 8020,[INFO] (SpiNNakEar_DRNL.c: 158): ,key:%d
 8021,[INFO] (SpiNNakEar_DRNL.c: 169): ,CF=%d\n
 8022,[INFO] (SpiNNakEar_DRNL.c: 176): ,n_seg_per_ms=%d\n
+8023,[INFO] (SpiNNakEar_DRNL.c: 582): ,sending final packet to IHCANs\n
