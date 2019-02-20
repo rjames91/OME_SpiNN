@@ -513,6 +513,9 @@ class SpiNNakEarVertex(ApplicationVertex,
                     # add parent index to mack edge entry
                     mack_edge_list[mack].append((parent, acknowledge_partition_dict['mack']))
 
+                # add mack index to ome edge entry
+                edge_index_list[ome_index].append((mack, command_partition_dict['ome']))
+
             row_macks[:] = parents
         # reverse the order of the mack lists so it's bottom up (OME->DRNLs)
         mack_edge_list.reverse()

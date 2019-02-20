@@ -124,8 +124,12 @@ class MCackVertex(
         spec.switch_write_focus(0)
 
         # Write the Parent key
-        spec.write_value(self._parent.get_acknowledge_key(
-            placement, routing_info))
+        parent_key = self._parent.get_acknowledge_key(
+            placement, routing_info)
+        if parent_key is None:
+            raise Exception("none parent key!")
+
+        spec.write_value(parent_key, data_type=self._COREID_TYPE)
 
         # Write number of child nodes
         spec.write_value(

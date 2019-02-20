@@ -34,6 +34,7 @@ enum params {
 uint parent_key;
 uint child_key;
 uint num_children;
+uint r2s_count;
 uint final_ack;
 uint mask;
 uint sync_count;
@@ -59,6 +60,8 @@ void app_init(void)
     mask=3;
     final_ack=0;
     sync_count=0;
+    r2s_count = 0;
+    log_info("init complete");
 }
 
 void app_end()
@@ -82,7 +85,7 @@ void sync_check(uint mc_key, uint null)
         if(!final_ack)
         {
             sync_count=0;
-            final_ack=1;
+            final_ack = 1;
         }
         //second wave of acks
         else
@@ -90,7 +93,6 @@ void sync_check(uint mc_key, uint null)
             app_end();
         }
     }
-
 }
 
 void app_done ()
@@ -104,6 +106,16 @@ void app_done ()
   io_printf (IO_BUF, "[core %d] -------------------\n", coreID);
 }
 
+void r2s_rx(uint mc_key, uint payload){
+    log_info("r2s from %d received",mc_key-1);
+    r2s_count++;
+    if (r2s_count>1 && !final_ack){
+        log_info("second r2s rx with no initial acks!");
+        app_end();
+    }
+}
+
+
 void c_main()
 {
   // Get core and chip IDs
@@ -114,6 +126,7 @@ void c_main()
 
   //setup callbacks
   spin1_callback_on (MC_PACKET_RECEIVED,sync_check,-1);
+  spin1_callback_on (MCPL_PACKET_RECEIVED,r2s_rx,-1);
 
   spin1_start (SYNC_WAIT);
   
