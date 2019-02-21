@@ -28,7 +28,8 @@ uint chipID;
 // The parameters to be read from memory
 enum params {
     PARENT_KEY,
-    NUM_CHILDREN
+    NUM_CHILDREN,
+    CHILD_ACK_KEYS
     };
 
 uint parent_key;
@@ -38,6 +39,7 @@ uint r2s_count;
 uint final_ack;
 uint mask;
 uint sync_count;
+uint *child_ack_keys;
 
 void app_init(void)
 {
@@ -54,8 +56,17 @@ void app_init(void)
     //get number of children
     num_children=params[NUM_CHILDREN];
 
+    child_ack_keys = (uint *)spin1_malloc(num_children*4);
+    spin1_memcpy(child_ack_keys, &(params[CHILD_ACK_KEYS]),
+        num_children*4);
+
     log_info("num_child nodes:%d",num_children);
     log_info("parent key:%d",parent_key);
+
+    for (uint i=0;i<num_children;i++){
+        io_printf(IO_BUF,"child ack key:%d",child_ack_keys[i]);
+    }
+    io_printf(IO_BUF,"\n");
 
     mask=3;
     final_ack=0;

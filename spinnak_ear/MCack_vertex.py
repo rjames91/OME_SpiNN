@@ -119,7 +119,7 @@ class MCackVertex(
             self, spec, placement, routing_info, tags, placements):
 
         # Reserve and write the parameters region
-        region_size = self._N_PARAMETER_BYTES
+        region_size = self._N_PARAMETER_BYTES + 4 * 4
         spec.reserve_memory_region(0, region_size)
         spec.switch_write_focus(0)
 
@@ -134,6 +134,14 @@ class MCackVertex(
         # Write number of child nodes
         spec.write_value(
             len(self._child_vertices), data_type=self._COREID_TYPE)
+
+        #Write the child nodes ack keys (for debugging)
+        child_ack_keys = []
+        for child in self._child_vertices:
+            child_ack_keys.append(routing_info.get_first_key_from_pre_vertex(
+                child, child._acknowledge_partition_name))
+        data = numpy.array(child_ack_keys, dtype=numpy.uint32)
+        spec.write_array(data.view(numpy.uint32))
 
         # End the specification
         spec.end_specification()
