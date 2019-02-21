@@ -7,6 +7,7 @@ from pacman.model.constraints.partitioner_constraints.fixed_vertex_atoms_constra
 from pacman.model.graphs.machine.machine_edge import MachineEdge
 from pacman.model.constraints.placer_constraints import SameChipAsConstraint,EarConstraint
 from pacman.model.placements import Placement, Placements
+from spinn_utilities.progress_bar import ProgressBar
 
 
 from spinn_front_end_common.utilities import globals_variables,helpful_functions
@@ -64,7 +65,7 @@ command_partition_dict = {'ome':'OMECommand',
 
 class SpiNNakEarVertex(ApplicationVertex,
                        AbstractAcceptsIncomingSynapses,
-                       AbstractSpikeRecordable,
+                       # AbstractSpikeRecordable,
                        # ConstrainedObject,
                        # AbstractGeneratesDataSpecification,
                        # AbstractHasAssociatedBinary,
@@ -94,7 +95,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._model = model
         self.param_file = param_file
         self.audio_input = audio_input
-        self._data_size = (
+        self._data_size_bytes = (
             (self.audio_input.size * self._DATA_ELEMENT_TYPE.size) +
             self._DATA_COUNT_TYPE.size
         )
@@ -110,7 +111,8 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._max_n_atoms_per_group_tree_row = (self._MAX_N_ATOMS_PER_CORE ** np.arange(1,self._n_group_tree_rows+1)) * self._N_FIBRES_PER_IHCAN
         self._max_n_atoms_per_group_tree_row = self._max_n_atoms_per_group_tree_row[self._max_n_atoms_per_group_tree_row < 256]
         self._n_group_tree_rows = self._max_n_atoms_per_group_tree_row.size
-
+        self._is_recording_spikes = False
+        self._is_recording_moc = False
 
         self._mv_list = []#append to each time create_machine_vertex is called
         if pole_freqs is None:
@@ -199,6 +201,43 @@ class SpiNNakEarVertex(ApplicationVertex,
         np.savez_compressed(filepath,
                             n_atoms=self._n_atoms,mv_index_list=self._mv_index_list, parent_index_list= self._parent_index_list,
                             edge_index_list=self._edge_index_list,ihc_seeds=self._ihc_seeds,ome_indices=self._ome_indices)
+    def record(self,variables):
+        if not isinstance(variables,list):
+            variables = [variables]
+        if len(variables)==0:
+            variables.append("all")
+        for variable in variables:
+            if variable == "spikes":
+                self._is_recording_spikes = True
+            elif variable == "MOC":
+                self._is_recording_moc = True
+            elif variable == "all":
+                self._is_recording_spikes = True
+                self._is_recording_moc = True
+            else:
+                raise Exception("recording of " + variable + " not supported by SpiNNak-Ear!")
+
+    def get_data(self,variables):
+        b_manager = globals_variables.get_simulator().buffer_manager
+        output_list = []
+        if not isinstance(variables,list):
+            variables = [variables]
+        if len(variables)==0:
+            variables.append("all")
+        for variable in variables:
+            if variable == "spikes":
+                spikes = []
+                drnl_indices = [i for i,label in enumerate(self._mv_index_list) if label=="drnl"]
+                progress = ProgressBar(len(drnl_indices), "reading ear {} spikes".format(self._ear_index))
+                for drnl in drnl_indices:
+                    drnl_vertex = self._mv_list[drnl]
+                    channel_fibres = (drnl_vertex.read_samples(b_manager))
+                    progress.update()
+                    for fibre in channel_fibres:
+                        spikes.append(fibre)
+                output_list.append(np.asarray(spikes))
+                progress.end()
+        return output_list
 
     # def get_binary_start_type(self):
     #     super(SpiNNakEarVertex, self).get_binary_start_type()
@@ -230,7 +269,7 @@ class SpiNNakEarVertex(ApplicationVertex,
             self, vertex_slice, n_machine_time_steps, machine_time_step):
         vertex_label = self._mv_index_list[vertex_slice.lo_atom]
         if vertex_label == "ome":
-            sdram_resource_bytes = (9*4) + (6*8) + self._data_size
+            sdram_resource_bytes = (9*4) + (6*8) + self._data_size_bytes
             drnl_vertices = [i for i in self._mv_index_list if i == "drnl"]
             sdram_resource_bytes += len(drnl_vertices) * self._KEY_ELEMENT_TYPE.size
             # Live input parameters
@@ -239,7 +278,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 tag=None)]
 
         elif vertex_label == "mack":
-            sdram_resource_bytes = 2*4
+            sdram_resource_bytes = 2*4 + 4 * self._KEY_ELEMENT_TYPE.size
             reverse_iptags = None
 
         elif vertex_label == "drnl":
@@ -248,8 +287,10 @@ class SpiNNakEarVertex(ApplicationVertex,
             reverse_iptags = None
 
         elif vertex_label == "ihc":
-            sdram_resource_bytes = 10*4 + 1 * self._KEY_ELEMENT_TYPE.size #+ self._data_size
-            # sdram_resource_bytes = 10*4 + 1 * self._KEY_ELEMENT_TYPE.size + np.ceil(self._data_size/(self._DATA_ELEMENT_TYPE.size*8))
+            if self._is_recording_spikes:
+                sdram_resource_bytes = 12*4 + 1 * self._KEY_ELEMENT_TYPE.size + self._N_FIBRES_PER_IHCAN * np.ceil(self.audio_input.size/8.) * 4
+            else:
+                sdram_resource_bytes = 12*4 + 1 * self._KEY_ELEMENT_TYPE.size
             reverse_iptags = None
         else:#angroup
             child_vertices = [self._mv_list[vertex_index] for vertex_index in self._parent_index_list[vertex_slice.lo_atom]]
@@ -263,19 +304,6 @@ class SpiNNakEarVertex(ApplicationVertex,
             dtcm=DTCMResource(0),
             cpu_cycles=CPUCyclesPerTickResource(0))
             #,reverse_iptags=reverse_iptags)
-
-        if vertex_label == "ihc":
-            recording_sizes = recording_utilities.get_recording_region_sizes(
-                [self._spike_recorder.get_sdram_usage_in_bytes(
-                    vertex_slice.n_atoms, self._max_spikes_per_ts(
-                        n_machine_time_steps, machine_time_step),
-                    self._N_POPULATION_RECORDING_REGIONS) * n_machine_time_steps],
-                self._minimum_buffer_sdram,
-                self._maximum_sdram_for_buffering,
-                self._using_auto_pause_and_resume)
-            container.extend(recording_utilities.get_recording_resources(
-                recording_sizes, self._receive_buffer_host,
-                self._receive_buffer_port))
 
         return container
 
@@ -357,17 +385,18 @@ class SpiNNakEarVertex(ApplicationVertex,
 
         elif mv_type == 'ihc':
             for parent in parent_mvs:
-                buffered_sdram_per_timestep = \
-                    self._spike_recorder.get_sdram_usage_in_bytes(
-                        vertex_slice.n_atoms, self._max_spikes_per_ts(
-                            n_machine_time_steps, machine_time_step), 1)
-                minimum_buffer_sdram = recording_utilities.get_minimum_buffer_sdram(
-                    [buffered_sdram_per_timestep * n_machine_time_steps],
-                    self._minimum_buffer_sdram)
+                # buffered_sdram_per_timestep = \
+                #     self._spike_recorder.get_sdram_usage_in_bytes(
+                #         vertex_slice.n_atoms, self._max_spikes_per_ts(
+                #             n_machine_time_steps, machine_time_step), 1)
+                # minimum_buffer_sdram = recording_utilities.get_minimum_buffer_sdram(
+                #     [buffered_sdram_per_timestep * n_machine_time_steps],
+                #     self._minimum_buffer_sdram)
                 vertex = IHCANVertex(self._mv_list[parent], 1,
-                                    self._ihc_seeds[self._seed_index:self._seed_index + 4],self._spike_recorder.record,
-                                    minimum_buffer_sdram[0], buffered_sdram_per_timestep,self._spike_recorder,self._buffer_size_before_receive,
-                                    self._max_spikes_per_ts,self._maximum_sdram_for_buffering,ear_index=self._ear_index,bitfield=True, profile=False)
+                                    self._ihc_seeds[self._seed_index:self._seed_index + 4],self._is_recording_spikes,
+                                    # minimum_buffer_sdram[0], buffered_sdram_per_timestep,self._spike_recorder,self._buffer_size_before_receive,
+                                    # self._max_spikes_per_ts,self._maximum_sdram_for_buffering,ear_index=self._ear_index,bitfield=True, profile=False)
+                                    ear_index=self._ear_index,bitfield=True, profile=False)
                 self._seed_index += 4
                 # ensure placement is on the same chip as the parent DRNL
                 vertex.add_constraint(SameChipAsConstraint(self._mv_list[parent]))
@@ -411,50 +440,6 @@ class SpiNNakEarVertex(ApplicationVertex,
     def n_atoms(self):
 
         return self._n_atoms
-
-    @overrides(AbstractSpikeRecordable.get_spikes)
-    def get_spikes(
-            self, placements, graph_mapper, buffer_manager, machine_time_step):
-        #filter placements that are IHC nodes
-        # pls = []
-        # for p in placements:
-        #     if isinstance(p.vertex,IHCANVertex):
-        #         pls.append(p)
-        # placements = Placements(pls)
-
-        return self._spike_recorder.get_spikes(
-            self.label, buffer_manager,
-            SpiNNakEarVertex.SPIKE_RECORDING_REGION_ID,
-            placements, graph_mapper, self, machine_time_step)
-
-    @overrides(AbstractSpikeRecordable.get_spikes_sampling_interval)
-    def get_spikes_sampling_interval(self):
-        return globals_variables.get_simulator().machine_time_step
-
-    @overrides(AbstractSpikeRecordable.is_recording_spikes)
-    def is_recording_spikes(self):
-        return self._spike_recorder.record
-
-    @overrides(AbstractSpikeRecordable.clear_spike_recording)
-    def clear_spike_recording(self, buffer_manager, placements, graph_mapper):
-        machine_vertices = graph_mapper.get_machine_vertices(self)
-        for machine_vertex in machine_vertices:
-            #if mv is IHCAN
-            placement = placements.get_placement_of_vertex(machine_vertex)
-            buffer_manager.clear_recorded_data(
-                placement.x, placement.y, placement.p,
-                SpiNNakEarVertex.SPIKE_RECORDING_REGION_ID)
-
-    @overrides(AbstractSpikeRecordable.set_recording_spikes)
-    def set_recording_spikes(
-            self, new_state=True, sampling_interval=None, indexes=None):
-        if sampling_interval is not None:
-            logger.warning("Sampling interval currently not supported for "
-                           "SpikeSourcePoisson so being ignored")
-        if indexes is not None:
-            logger.warning("indexes not supported for "
-                           "SpikeSourcePoisson so being ignored")
-        self._spike_recorder.record = new_state
 
     def calculate_n_atoms(self,n_channels,n_group_tree_rows, n_macks=4, n_ihcs=5):
         # list indices correspond to atom index

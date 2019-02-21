@@ -29,8 +29,6 @@ from spinn_front_end_common.abstract_models\
     .abstract_provides_n_keys_for_partition \
     import AbstractProvidesNKeysForPartition
 
-from spinn_utilities.progress_bar import ProgressBar
-
 from spinn_front_end_common.interface.profiling.abstract_has_profile_data \
     import AbstractHasProfileData
 from spinn_front_end_common.interface.profiling import profile_utils
@@ -293,9 +291,6 @@ class DRNLVertex(
         spec.write_array(bitfield_conn_lut.view("uint32"))
         spec.write_array(key_and_mask_table.view("<u4"))
 
-        #self.get_spinnakear_master_pop_size()
-        #Write the conn LUT
-
     #    print "DRNL OME placement=",OME_placement
    #     print "DRNL placement=",placement.p
         if self._profile:
@@ -307,17 +302,17 @@ class DRNLVertex(
         spec.end_specification()
 
     def read_samples(self, buffer_manager):
-        """ Read back the samples
-        """
-        progress = ProgressBar(len(self._ihcan_placements), "Reading results")
+        """ Read back the samples        """
+
         samples = list()
         for placement in self._ihcan_placements:
 
             # Read the data recorded
-            samples.append(
-                placement.vertex.read_samples(buffer_manager, placement))
-            progress.update()
-        progress.end()
+            for fibre in placement.vertex.read_samples(buffer_manager, placement):
+                samples.append(fibre)
+            # samples.append(
+            #     placement.vertex.read_samples(buffer_manager, placement))
+
 
         # Merge all the arrays
-        return numpy.hstack(samples)
+        return numpy.asarray(samples)

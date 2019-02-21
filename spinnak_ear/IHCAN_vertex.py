@@ -43,12 +43,12 @@ class IHCANVertex(
         AbstractGeneratesDataSpecification,
         AbstractProvidesNKeysForPartition,
         AbstractHasProfileData,
-        AbstractRecordable
+        # AbstractRecordable
         ):
     """ A vertex that runs the DRNL algorithm
     """
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 11*4#
+    _N_PARAMETER_BYTES = 12*4#
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32#DataType.FLOAT_64
     # The data type of the data count
@@ -74,9 +74,10 @@ class IHCANVertex(
                ('RECORDING', 2),
                ('PROFILE', 3)])
 
-    def __init__(self, drnl,resample_factor,seed,is_recording, minimum_buffer_sdram,
-            buffered_sdram_per_timestep,spike_recorder,buffer_size_before_receive,
-                 max_spikes_per_ts,maximum_sdram_for_buffering,n_fibres=2,ear_index=0,bitfield=True,profile=True):#TODO:add Fs to params
+    def __init__(self, drnl,resample_factor,seed,is_recording,# minimum_buffer_sdram,
+            #buffered_sdram_per_timestep,spike_recorder,buffer_size_before_receive,
+                 #max_spikes_per_ts,maximum_sdram_for_buffering,
+                 n_fibres=2,ear_index=0,bitfield=True,profile=True):
         """
         :param ome: The connected ome vertex    """
 
@@ -84,12 +85,12 @@ class IHCANVertex(
         AbstractProvidesNKeysForPartition.__init__(self)
         AbstractRecordable.__init__(self)
         self._is_recording = is_recording
-        self._minimum_buffer_sdram = minimum_buffer_sdram
-        self._buffered_sdram_per_timestep = buffered_sdram_per_timestep
-        self._spike_recorder = spike_recorder
-        self._buffer_size_before_receive = buffer_size_before_receive
-        self._max_spikes_per_ts = max_spikes_per_ts
-        self._maximum_sdram_for_buffering = maximum_sdram_for_buffering
+        # self._minimum_buffer_sdram = minimum_buffer_sdram
+        # self._buffered_sdram_per_timestep = buffered_sdram_per_timestep
+        # self._spike_recorder = spike_recorder
+        # self._buffer_size_before_receive = buffer_size_before_receive
+        # self._max_spikes_per_ts = max_spikes_per_ts
+        # self._maximum_sdram_for_buffering = maximum_sdram_for_buffering
         self._ear_index = ear_index
 
         self._drnl = drnl
@@ -99,7 +100,7 @@ class IHCANVertex(
         self._n_atoms = n_fibres
         self._num_data_points = n_fibres * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
         if bitfield:
-            self._recording_size = numpy.ceil(float(self._num_data_points * self._DATA_ELEMENT_TYPE.size)/(self._DATA_ELEMENT_TYPE.size*8))
+            self._recording_size = numpy.ceil((self._num_data_points/8.) * self._KEY_ELEMENT_TYPE.size)
         else:
             self._recording_size = self._num_data_points * self._DATA_ELEMENT_TYPE.size
         self._seed = seed
@@ -134,7 +135,8 @@ class IHCANVertex(
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES
         sdram += 1 * self._KEY_ELEMENT_TYPE.size
-        # sdram += self._recording_size
+        if self._is_recording:
+            sdram += self._recording_size
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 
@@ -197,15 +199,15 @@ class IHCANVertex(
         region_size += 1 * self._KEY_ELEMENT_TYPE.size
         spec.reserve_memory_region(self.REGIONS.PARAMETERS.value, region_size)
 
-        # #reserve recording region
-        # spec.reserve_memory_region(
-        #     self.REGIONS.RECORDING.value,
-        #     recording_utilities.get_recording_header_size(1))
-        # if self._profile:
-        #     #reserve profile region
-        #     profile_utils.reserve_profile_region(
-        #         spec, self.REGIONS.PROFILE.value,
-        #         self._n_profile_samples)
+        #reserve recording region
+        spec.reserve_memory_region(
+            self.REGIONS.RECORDING.value,
+            recording_utilities.get_recording_header_size(1))
+        if self._profile:
+            #reserve profile region
+            profile_utils.reserve_profile_region(
+                spec, self.REGIONS.PROFILE.value,
+                self._n_profile_samples)
 
         # simulation.c requirements
         spec.switch_write_focus(self.REGIONS.SYSTEM.value)
@@ -257,15 +259,17 @@ class IHCANVertex(
                 spec.write_value(
                    key, data_type=self._COREID_TYPE)
 
+        #Write is recording bool
+        spec.write_value(int(self._is_recording),data_type=self._COREID_TYPE)
         #Write the seed
         data = numpy.array(self._seed, dtype=numpy.uint32)
         spec.write_array(data.view(numpy.uint32))
 
         # Write the recording regions
-        # spec.switch_write_focus(self.REGIONS.RECORDING.value)
-        # ip_tags = tags.get_ip_tags_for_vertex(self) or []
-        # spec.write_array(recording_utilities.get_recording_header_array(
-        #     [self._recording_size], ip_tags=ip_tags))
+        spec.switch_write_focus(self.REGIONS.RECORDING.value)
+        ip_tags = tags.get_ip_tags_for_vertex(self) or []
+        spec.write_array(recording_utilities.get_recording_header_array(
+            [self._recording_size], ip_tags=ip_tags))
         # write recording data
 
         # ip_tags = tags.get_ip_tags_for_vertex(self) or []
@@ -296,19 +300,28 @@ class IHCANVertex(
         data_values, _ = buffer_manager.get_data_for_vertex(placement, 0)
         data = data_values.read_all()
 
-        numpy_format=list()
-        numpy_format.append(("AN",numpy.float32))
         if self._bitfield:
             formatted_data = numpy.array(data, dtype=numpy.uint8)
-            unpacked = numpy.unpackbits(formatted_data)
-            output_data = unpacked.astype(numpy.float32)
+            #only interested in every 4th byte!
+            formatted_data = formatted_data[::4]
+            lsr = formatted_data[0::2]
+            hsr = formatted_data[1::2]
+            unpacked_lsr = numpy.unpackbits(lsr)
+            unpacked_hsr = numpy.unpackbits(hsr)
+            # output_data = [unpacked_lsr.astype(numpy.float32),unpacked_hsr.astype(numpy.float32)]
+            output_data = [numpy.nonzero(unpacked_lsr)[0]*(1000./self._fs),numpy.nonzero(unpacked_hsr)[0]*(1000./self._fs)]
+            output_length = unpacked_hsr.size + unpacked_lsr.size
+
         else:
+            numpy_format = list()
+            numpy_format.append(("AN", numpy.float32))
             formatted_data = numpy.array(data, dtype=numpy.uint8,copy=True).view(numpy_format)
             output_data = formatted_data.copy()
+            output_length = len(output_data)
 
 
         #check all expected data has been recorded
-        if len(output_data) != self._num_data_points:
+        if output_length != self._num_data_points:
             #if not set output to zeros of correct length, this will cause an error flag in run_ear.py
             #raise Warning
             print("recording not complete, reduce Fs or disable RT!\n"
@@ -321,33 +334,38 @@ class IHCANVertex(
         #return formatted_data
         return output_data
 
-    # def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
-    #     return recording_utilities.get_n_timesteps_in_buffer_space(
-    #         buffer_space, 4)
-    #
-    # def get_recorded_region_ids(self):
-    #     return [0]
+    def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
+        return recording_utilities.get_n_timesteps_in_buffer_space(
+            buffer_space, 4)
 
-    @overrides(AbstractReceiveBuffersToHost.get_recording_region_base_address)
+    def get_recorded_region_ids(self):
+        return [0]
+
     def get_recording_region_base_address(self, txrx, placement):
         return helpful_functions.locate_memory_region_for_placement(
             placement, self.REGIONS.RECORDING.value, txrx)
 
-    @overrides(AbstractRecordable.is_recording)
-    def is_recording(self):
-        return self._is_recording
 
-    @overrides(AbstractReceiveBuffersToHost.get_minimum_buffer_sdram_usage)
-    def get_minimum_buffer_sdram_usage(self):
-        return self._minimum_buffer_sdram
-
-    @overrides(AbstractReceiveBuffersToHost.get_n_timesteps_in_buffer_space)
-    def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
-        return recording_utilities.get_n_timesteps_in_buffer_space(
-            buffer_space, [self._buffered_sdram_per_timestep])
-
-    @overrides(AbstractReceiveBuffersToHost.get_recorded_region_ids)
-    def get_recorded_region_ids(self):
-        if self._is_recording:
-            return [0]
-        return []
+    # @overrides(AbstractReceiveBuffersToHost.get_recording_region_base_address)
+    # def get_recording_region_base_address(self, txrx, placement):
+    #     return helpful_functions.locate_memory_region_for_placement(
+    #         placement, self.REGIONS.RECORDING.value, txrx)
+    #
+    # @overrides(AbstractRecordable.is_recording)
+    # def is_recording(self):
+    #     return self._is_recording
+    #
+    # @overrides(AbstractReceiveBuffersToHost.get_minimum_buffer_sdram_usage)
+    # def get_minimum_buffer_sdram_usage(self):
+    #     return self._minimum_buffer_sdram
+    #
+    # @overrides(AbstractReceiveBuffersToHost.get_n_timesteps_in_buffer_space)
+    # def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
+    #     return recording_utilities.get_n_timesteps_in_buffer_space(
+    #         buffer_space, [self._buffered_sdram_per_timestep])
+    #
+    # @overrides(AbstractReceiveBuffersToHost.get_recorded_region_ids)
+    # def get_recorded_region_ids(self):
+    #     if self._is_recording:
+    #         return [0]
+    #     return []
