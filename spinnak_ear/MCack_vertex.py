@@ -139,7 +139,7 @@ class MCackVertex(
         child_ack_keys = []
         for child in self._child_vertices:
             child_ack_keys.append(routing_info.get_first_key_from_pre_vertex(
-                child, child._acknowledge_partition_name))
+                child, self._acknowledge_partition_name))
         data = numpy.array(child_ack_keys, dtype=numpy.uint32)
         spec.write_array(data.view(numpy.uint32))
 
