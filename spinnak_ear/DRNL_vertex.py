@@ -16,7 +16,6 @@ from spinn_front_end_common.abstract_models\
     import AbstractGeneratesDataSpecification
 from spinn_front_end_common.interface.buffer_management.buffer_models\
     .abstract_receive_buffers_to_host import AbstractReceiveBuffersToHost
-from spinn_front_end_common.utilities import helpful_functions
 from spinn_front_end_common.interface.buffer_management \
     import recording_utilities
 from spinn_front_end_common.utilities.utility_objs import ExecutableType
@@ -32,6 +31,10 @@ from spinn_front_end_common.abstract_models\
 from spinn_front_end_common.interface.profiling.abstract_has_profile_data \
     import AbstractHasProfileData
 from spinn_front_end_common.interface.profiling import profile_utils
+from spinn_front_end_common.utilities import helpful_functions, constants
+from spinn_front_end_common.interface.simulation import simulation_utilities
+
+
 
 class DRNLVertex(
         MachineVertex, AbstractHasAssociatedBinary,
@@ -42,7 +45,7 @@ class DRNLVertex(
     """ A vertex that runs the DRNL algorithm
     """
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 10*4
+    _N_PARAMETER_BYTES = 14*4
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32
     # The data type of the data count
@@ -65,7 +68,14 @@ class DRNLVertex(
         3: "PROCESS_FIXED_SYNAPSES",
         4: "PROCESS_PLASTIC_SYNAPSES"}
 
-    def __init__(self, ome,CF,delay,profile=True,drnl_index=None,data_partition_name="DRNLData",
+    REGIONS = Enum(
+        value="REGIONS",
+        names=[('SYSTEM', 0),
+               ('PARAMETERS', 1),
+               ('RECORDING', 2),
+               ('PROFILE', 3)])
+
+    def __init__(self, ome,CF,delay,is_recording=False,profile=True,drnl_index=None,data_partition_name="DRNLData",
             acknowledge_partition_name="DRNLDataAck"):
         """
 
@@ -80,6 +90,8 @@ class DRNLVertex(
         self._delay=int(delay)
         self._mack=ome
         self._drnl_index = drnl_index
+        self._is_recording = is_recording
+        self._placement = None
 
         self._ihcan_vertices = list()
         self._ihcan_placements = list()
@@ -87,13 +99,9 @@ class DRNLVertex(
         self._moc_vertices = list()
 
         self._num_data_points = ome.n_data_points
-        self._data_size = (
-            self._num_data_points * self._DATA_ELEMENT_TYPE.size +
+        self._recording_size = (
+            self._num_data_points * DataType.FLOAT_64.size +
             self._DATA_COUNT_TYPE.size
-        )
-
-        self._sdram_usage = (
-            self._N_PARAMETER_BYTES #+ self._data_size
         )
 
         self._data_partition_name = data_partition_name
@@ -103,6 +111,7 @@ class DRNLVertex(
         self._profile = profile
         self._n_profile_samples = 10000
         self._process_profile_times = None
+        self._filter_params = self.calculate_filter_parameters()
 
     def register_processor(self, ihcan_vertex):
         self._ihcan_vertices.append(ihcan_vertex)
@@ -117,6 +126,48 @@ class DRNLVertex(
 
     def add_moc_vertex(self,vertex,conn_matrix):
         self._moc_vertices.append((vertex,conn_matrix))
+
+    def calculate_filter_parameters(self):
+        dt = 1./self._fs
+        nlBWq = 180.0
+        nlBWp = 0.14
+        nlin_bw = nlBWp * self._CF + nlBWq
+        nlin_phi = 2.0 * numpy.pi * nlin_bw * dt
+        nlin_theta = 2.0 * numpy.pi * self._CF * dt
+        nlin_cos_theta = numpy.cos(nlin_theta)
+        nlin_sin_theta = numpy.sin(nlin_theta)
+        nlin_alpha = -numpy.exp(-nlin_phi) * nlin_cos_theta
+        nlin_a1 = 2.0 * nlin_alpha
+        nlin_a2 = numpy.exp(-2.0 * nlin_phi)
+        nlin_z1 = complex((1.0 + nlin_alpha * nlin_cos_theta), - (nlin_alpha * nlin_sin_theta))
+        nlin_z2 = complex((1.0 + nlin_a1 * nlin_cos_theta), - (nlin_a1 * nlin_sin_theta))
+        nlin_z3 = complex((nlin_a2 * numpy.cos(2.0 * nlin_theta)), - (nlin_a2 * numpy.sin(2.0 * nlin_theta)))
+        nlin_tf = (nlin_z2 + nlin_z3) / nlin_z1
+        nlin_b0 = abs(nlin_tf)
+        nlin_b1 = nlin_alpha * nlin_b0
+
+        linBWq = 235.0
+        linBWp = 0.2
+        lin_bw = linBWp * self._CF + linBWq
+        lin_phi = 2.0 * numpy.pi * lin_bw * dt
+        linCFp = 0.62
+        linCFq = 266.0
+        lin_cf = linCFp * self._CF + linCFq
+        lin_theta = 2.0 * numpy.pi * lin_cf * dt
+        lin_cos_theta = numpy.cos(lin_theta)
+        lin_sin_theta = numpy.sin(lin_theta)
+        lin_alpha = -numpy.exp(-lin_phi) * lin_cos_theta
+        lin_a1 = 2.0 * lin_alpha
+        lin_a2 = numpy.exp(-2.0 * lin_phi)
+        lin_z1 = complex((1.0 + lin_alpha * lin_cos_theta), - (lin_alpha * lin_sin_theta))
+        lin_z2 = complex((1.0 + lin_a1 * lin_cos_theta), - (lin_a1 * lin_sin_theta))
+        lin_z3 = complex((lin_a2 * numpy.cos(2.0 * lin_theta)), - (lin_a2 * numpy.sin(2.0 * lin_theta)))
+        lin_tf = (lin_z2 + lin_z3) / lin_z1
+        lin_b0 = abs(lin_tf)
+        lin_b1 = lin_alpha * lin_b0
+
+
+        return [lin_a1,lin_a2,lin_b0,lin_b1,nlin_a1,nlin_a2,nlin_b0,nlin_b1]
 
     @property
     def n_data_points(self):
@@ -138,7 +189,10 @@ class DRNLVertex(
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES
-        sdram += len(self._ihcan_vertices) * self._KEY_ELEMENT_TYPE.size
+        sdram += constants.SYSTEM_BYTES_REQUIREMENT + 8
+        sdram += len(self._moc_vertices) * self._KEY_MASK_ENTRY_SIZE_BYTES
+        sdram += len(self._moc_vertices) * 256/4#max connlut size
+        sdram += len(self._filter_params) * 8
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 
@@ -155,7 +209,7 @@ class DRNLVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
-        return ExecutableType.SYNC
+        return ExecutableType.USES_SIMULATION_INTERFACE
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
@@ -185,6 +239,7 @@ class DRNLVertex(
             self, spec, placement, routing_info, tags, placements):
 
         OME_placement=placements.get_placement_of_vertex(self._ome).p
+        self._placement = placements.get_placement_of_vertex(self)
 
         n_moc_mvs = len(self._moc_vertices)
         key_and_mask_table = numpy.zeros(n_moc_mvs, dtype=self._KEY_MASK_ENTRY_DTYPE)
@@ -209,18 +264,38 @@ class DRNLVertex(
         conn_lut_size_bytes = conn_lut_size*4
         key_and_mask_table_size_bytes = key_and_mask_table.size * self._KEY_MASK_ENTRY_SIZE_BYTES
 
-        # Reserve and write the parameters region
+        # Setup words + 1 for flags + 1 for recording size
+        setup_size = constants.SYSTEM_BYTES_REQUIREMENT + 8
+        # reserve system region
+        spec.reserve_memory_region(
+            region=self.REGIONS.SYSTEM.value,
+            size=setup_size, label='systemInfo')
+
+        # Reserve the parameters region
         region_size = self._N_PARAMETER_BYTES
         region_size += (1 + len(self._ihcan_vertices)) * self._KEY_ELEMENT_TYPE.size
-        region_size += conn_lut_size_bytes + key_and_mask_table_size_bytes + 2*self._KEY_ELEMENT_TYPE.size
-        spec.reserve_memory_region(0, region_size)
+        region_size += conn_lut_size_bytes + key_and_mask_table_size_bytes
+        region_size += len(self._filter_params) * 8
+        spec.reserve_memory_region(self.REGIONS.PARAMETERS.value, region_size)
+
+        #reserve recording region
+        if self._is_recording:
+            spec.reserve_memory_region(
+                self.REGIONS.RECORDING.value,
+                recording_utilities.get_recording_header_size(1))
         if self._profile:
             #reserve profile region
             profile_utils.reserve_profile_region(
                 spec, 1,
                 self._n_profile_samples)
 
-        spec.switch_write_focus(0)
+        # simulation.c requirements
+        spec.switch_write_focus(self.REGIONS.SYSTEM.value)
+        spec.write_array(simulation_utilities.get_simulation_header_array(
+            self.get_binary_file_name(), 1,
+            1))
+
+        spec.switch_write_focus(self.REGIONS.PARAMETERS.value)
 
         # Get the placement of the vertices and find out how many chips
         # are needed
@@ -283,6 +358,13 @@ class DRNLVertex(
             self._ome, self._ome.data_partition_name)
         spec.write_value(ome_data_key, data_type=DataType.UINT32)
 
+        #write is recording
+        spec.write_value(int(self._is_recording),data_type=DataType.UINT32)
+
+        # write the filter params
+        for param in self._filter_params:
+            spec.write_value(param,data_type=DataType.FLOAT_64)
+
         #Write the number of mocs
         spec.write_value(n_moc_mvs)
         #Write the size of the conn LUT
@@ -298,21 +380,65 @@ class DRNLVertex(
                 spec, 1,
                 self._n_profile_samples)
 
+        if self._is_recording:
+            # Write the recording regions
+            spec.switch_write_focus(self.REGIONS.RECORDING.value)
+            ip_tags = tags.get_ip_tags_for_vertex(self) or []
+            spec.write_array(recording_utilities.get_recording_header_array(
+                [self._recording_size], ip_tags=ip_tags))
+
         # End the specification
         spec.end_specification()
 
-    def read_samples(self, buffer_manager):
+    def read_samples(self, buffer_manager,variable='spikes'):
         """ Read back the samples        """
 
         samples = list()
-        for placement in self._ihcan_placements:
+        if variable == 'spikes':
+            for placement in self._ihcan_placements:
 
-            # Read the data recorded
-            for fibre in placement.vertex.read_samples(buffer_manager, placement):
-                samples.append(fibre)
-            # samples.append(
-            #     placement.vertex.read_samples(buffer_manager, placement))
-
+                # Read the data recorded
+                for fibre in placement.vertex.read_samples(buffer_manager, placement):
+                    samples.append(fibre)
+        elif variable == 'moc':
+            samples.append(self.read_moc_attenuation(buffer_manager,self._placement))
 
         # Merge all the arrays
         return numpy.asarray(samples)
+
+    def read_moc_attenuation(self, buffer_manager, placement):
+        """ Read back the spikes """
+
+        # Read the data recorded
+        data_values, _ = buffer_manager.get_data_for_vertex(placement, 0)
+        data = data_values.read_all()
+        numpy_format = list()
+        formatted_data = numpy.array(data, dtype=numpy.uint8,copy=True).view(numpy.float64)
+        output_data = formatted_data.copy()
+        output_length = len(output_data)
+
+
+        #check all expected data has been recorded
+        if output_length != self._num_data_points:
+            #if not set output to zeros of correct length, this will cause an error flag in run_ear.py
+            #raise Warning
+            print("recording not complete, reduce Fs or disable RT!\n"
+                            "recorded output length:{}, expected length:{} "
+                            "at placement:{},{},{}".format(len(output_data),
+                            self._num_data_points,placement.x,placement.y,placement.p))
+
+            # output_data = numpy.zeros(self._num_data_points)
+            output_data.resize(self._num_data_points,refcheck=False)
+        #return formatted_data
+        return output_data
+
+    def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
+        return recording_utilities.get_n_timesteps_in_buffer_space(
+            buffer_space, 4)
+
+    def get_recorded_region_ids(self):
+        return [0]
+
+    def get_recording_region_base_address(self, txrx, placement):
+        return helpful_functions.locate_memory_region_for_placement(
+            placement, self.REGIONS.RECORDING.value, txrx)

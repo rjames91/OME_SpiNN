@@ -10,14 +10,11 @@ from pacman.model.placements import Placement, Placements
 from spinn_utilities.progress_bar import ProgressBar
 
 
-from spinn_front_end_common.utilities import globals_variables,helpful_functions
+from spinn_front_end_common.utilities import globals_variables,helpful_functions,constants
 from spinn_front_end_common.utilities import constants as front_end_common_constants
 from spinn_front_end_common.utilities.constants import (
     DEFAULT_BUFFER_SIZE_BEFORE_RECEIVE, MAX_SIZE_OF_BUFFERED_REGION_ON_CHIP,
     SDP_PORTS)
-from spynnaker.pyNN.models.common import AbstractSpikeRecordable
-from spynnaker.pyNN.models.common import MultiSpikeRecorder
-
 
 from pacman.executor.injection_decorator import inject_items
 from data_specification.enums.data_type import DataType
@@ -65,7 +62,6 @@ command_partition_dict = {'ome':'OMECommand',
 
 class SpiNNakEarVertex(ApplicationVertex,
                        AbstractAcceptsIncomingSynapses,
-                       # AbstractSpikeRecordable,
                        # ConstrainedObject,
                        # AbstractGeneratesDataSpecification,
                        # AbstractHasAssociatedBinary,
@@ -163,28 +159,6 @@ class SpiNNakEarVertex(ApplicationVertex,
         ApplicationVertex.__init__(
             self, label, constraints, max_atoms_per_core)
 
-        # Prepare for recording, and to get spikes
-        self._spike_recorder = MultiSpikeRecorder()
-        self._time_between_requests = config.getint(
-            "Buffers", "time_between_requests")
-        self._receive_buffer_host = config.get(
-            "Buffers", "receive_buffer_host")
-        self._receive_buffer_port = helpful_functions.read_config_int(
-            config, "Buffers", "receive_buffer_port")
-        self._minimum_buffer_sdram = config.getint(
-            "Buffers", "minimum_buffer_sdram")
-        self._using_auto_pause_and_resume = config.getboolean(
-            "Buffers", "use_auto_pause_and_resume")
-
-        spike_buffer_max_size = 0
-        self._buffer_size_before_receive = None
-        if config.getboolean("Buffers", "enable_buffered_recording"):
-            spike_buffer_max_size = config.getint(
-                "Buffers", "spike_buffer_size")
-            self._buffer_size_before_receive = config.getint(
-                "Buffers", "buffer_size_before_receive")
-        self._maximum_sdram_for_buffering = [spike_buffer_max_size]
-
     def get_synapse_id_by_target(self, target):
         return 0
 
@@ -209,7 +183,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         for variable in variables:
             if variable == "spikes":
                 self._is_recording_spikes = True
-            elif variable == "MOC":
+            elif variable == "moc":
                 self._is_recording_moc = True
             elif variable == "all":
                 self._is_recording_spikes = True
@@ -219,25 +193,26 @@ class SpiNNakEarVertex(ApplicationVertex,
 
     def get_data(self,variables):
         b_manager = globals_variables.get_simulator().buffer_manager
-        output_list = []
+        output_data = {}
         if not isinstance(variables,list):
             variables = [variables]
         if len(variables)==0:
             variables.append("all")
+        if "all" in variables:
+            variables = ['spikes','moc']
         for variable in variables:
-            if variable == "spikes":
-                spikes = []
-                drnl_indices = [i for i,label in enumerate(self._mv_index_list) if label=="drnl"]
-                progress = ProgressBar(len(drnl_indices), "reading ear {} spikes".format(self._ear_index))
-                for drnl in drnl_indices:
-                    drnl_vertex = self._mv_list[drnl]
-                    channel_fibres = (drnl_vertex.read_samples(b_manager))
-                    progress.update()
-                    for fibre in channel_fibres:
-                        spikes.append(fibre)
-                output_list.append(np.asarray(spikes))
-                progress.end()
-        return output_list
+            recorded_output = []
+            drnl_indices = [i for i,label in enumerate(self._mv_index_list) if label=="drnl"]
+            progress = ProgressBar(len(drnl_indices), "reading ear {} ".format(self._ear_index) + variable)
+            for drnl in drnl_indices:
+                drnl_vertex = self._mv_list[drnl]
+                channel_fibres = (drnl_vertex.read_samples(b_manager,variable))
+                progress.update()
+                for fibre in channel_fibres:
+                    recorded_output.append(fibre)
+            output_data[variable]=np.asarray(recorded_output)
+            progress.end()
+        return output_data
 
     # def get_binary_start_type(self):
     #     super(SpiNNakEarVertex, self).get_binary_start_type()
@@ -282,8 +257,11 @@ class SpiNNakEarVertex(ApplicationVertex,
             reverse_iptags = None
 
         elif vertex_label == "drnl":
-            sdram_resource_bytes = 10*4
-            sdram_resource_bytes += self._n_ihc * self._KEY_ELEMENT_TYPE.size
+            sdram_resource_bytes = 14*4
+            sdram_resource_bytes += constants.SYSTEM_BYTES_REQUIREMENT + 8
+            sdram_resource_bytes += 512 * 12#key mask tab
+            sdram_resource_bytes += 8 * 8
+            sdram_resource_bytes += 256 #max n bytes for conn_lut
             reverse_iptags = None
 
         elif vertex_label == "ihc":
@@ -376,7 +354,8 @@ class SpiNNakEarVertex(ApplicationVertex,
                 #first parent will be ome
                 if parent_index in self._ome_indices:
                     ome = self._mv_list[parent]
-                    vertex = DRNLVertex(ome,self.pole_freqs[self._pole_index],0.,profile=False,drnl_index=self._pole_index)
+                    vertex = DRNLVertex(ome,self.pole_freqs[self._pole_index],0.,is_recording=self._is_recording_moc,
+                                        profile=False,drnl_index=self._pole_index)
                     self._pole_index +=1
                 else:#will be a mack vertex
                     self._mv_list[parent].register_mack_processor(vertex)
