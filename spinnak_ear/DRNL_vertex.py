@@ -195,6 +195,8 @@ class DRNLVertex(
         sdram += len(self._filter_params) * 8
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
+        if self._is_recording:
+            sdram += self._recording_size
 
         resources = ResourceContainer(
             dtcm=DTCMResource(0),

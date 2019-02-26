@@ -247,10 +247,10 @@ class SpiNNakEarVertex(ApplicationVertex,
             sdram_resource_bytes = (9*4) + (6*8) + self._data_size_bytes
             drnl_vertices = [i for i in self._mv_index_list if i == "drnl"]
             sdram_resource_bytes += len(drnl_vertices) * self._KEY_ELEMENT_TYPE.size
-            # Live input parameters
-            reverse_iptags = [ReverseIPtagResource(
-                port=None, sdp_port=SDP_PORTS.INPUT_BUFFERING_SDP_PORT.value,
-                tag=None)]
+            # # Live input parameters
+            # reverse_iptags = [ReverseIPtagResource(
+            #     port=None, sdp_port=SDP_PORTS.INPUT_BUFFERING_SDP_PORT.value,
+            #     tag=None)]
 
         elif vertex_label == "mack":
             sdram_resource_bytes = 2*4 + 4 * self._KEY_ELEMENT_TYPE.size
@@ -262,6 +262,8 @@ class SpiNNakEarVertex(ApplicationVertex,
             sdram_resource_bytes += 512 * 12#key mask tab
             sdram_resource_bytes += 8 * 8
             sdram_resource_bytes += 256 #max n bytes for conn_lut
+            if self._is_recording_moc:
+                sdram_resource_bytes += self._data_size_bytes
             reverse_iptags = None
 
         elif vertex_label == "ihc":
@@ -364,18 +366,9 @@ class SpiNNakEarVertex(ApplicationVertex,
 
         elif mv_type == 'ihc':
             for parent in parent_mvs:
-                # buffered_sdram_per_timestep = \
-                #     self._spike_recorder.get_sdram_usage_in_bytes(
-                #         vertex_slice.n_atoms, self._max_spikes_per_ts(
-                #             n_machine_time_steps, machine_time_step), 1)
-                # minimum_buffer_sdram = recording_utilities.get_minimum_buffer_sdram(
-                #     [buffered_sdram_per_timestep * n_machine_time_steps],
-                #     self._minimum_buffer_sdram)
                 vertex = IHCANVertex(self._mv_list[parent], 1,
                                     self._ihc_seeds[self._seed_index:self._seed_index + 4],self._is_recording_spikes,
-                                    # minimum_buffer_sdram[0], buffered_sdram_per_timestep,self._spike_recorder,self._buffer_size_before_receive,
-                                    # self._max_spikes_per_ts,self._maximum_sdram_for_buffering,ear_index=self._ear_index,bitfield=True, profile=False)
-                                    ear_index=self._ear_index,bitfield=True, profile=False)
+                                     ear_index=self._ear_index,bitfield=True, profile=False)
                 self._seed_index += 4
                 # ensure placement is on the same chip as the parent DRNL
                 vertex.add_constraint(SameChipAsConstraint(self._mv_list[parent]))
