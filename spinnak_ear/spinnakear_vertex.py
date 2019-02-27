@@ -82,11 +82,7 @@ class SpiNNakEarVertex(ApplicationVertex,
 
     def __init__(
             self, n_neurons, audio_input,fs,n_channels,pole_freqs,param_file,ear_index,
-            port, tag,   ip_address,board_address,
-            max_on_chip_memory_usage_for_spikes_in_bytes,
-            space_before_notification, constraints, label,
-            spike_recorder_buffer_size, buffer_size_before_receive,
-            max_atoms_per_core, model):
+            constraints, label,max_atoms_per_core, model):
         self._model_name = "SpikeSourceSpiNNakEar"
         self._model = model
         self.param_file = param_file
@@ -120,13 +116,6 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._pole_index = 0
 
         config = globals_variables.get_simulator().config
-        self._ip_address = ip_address
-        if ip_address is None:
-            self._ip_address = config.get("Buffers", "receive_buffer_host")
-        self._port = port
-        if port is None:
-            self._port = helpful_functions.read_config_int(
-                config, "Buffers", "receive_buffer_port")
         self._time_scale_factor = helpful_functions.read_config_int(config,"Machine","time_scale_factor")
         if self.fs / self._time_scale_factor > 22050:
             raise Exception("The input sampling frequency is too high for the chosen simulation time scale."
