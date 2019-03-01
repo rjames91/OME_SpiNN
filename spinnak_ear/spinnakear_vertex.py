@@ -101,7 +101,8 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._ear_index=ear_index
         self._n_group_tree_rows = int(np.ceil(math.log((n_channels*10)/self._N_FIBRES_PER_IHCAN, self._MAX_N_ATOMS_PER_CORE)))
         self._max_n_atoms_per_group_tree_row = (self._MAX_N_ATOMS_PER_CORE ** np.arange(1,self._n_group_tree_rows+1)) * self._N_FIBRES_PER_IHCAN
-        self._max_n_atoms_per_group_tree_row = self._max_n_atoms_per_group_tree_row[self._max_n_atoms_per_group_tree_row < 256]
+        # self._max_n_atoms_per_group_tree_row = self._max_n_atoms_per_group_tree_row[self._max_n_atoms_per_group_tree_row < 256]
+        self._max_n_atoms_per_group_tree_row = self._max_n_atoms_per_group_tree_row[self._max_n_atoms_per_group_tree_row <= 256]
         self._n_group_tree_rows = self._max_n_atoms_per_group_tree_row.size
         self._is_recording_spikes = False
         self._is_recording_moc = False
