@@ -375,6 +375,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 is_final_row = False
 
             vertex = ANGroupVertex(child_vertices,max_n_atoms = max_n_atoms,is_final_row=is_final_row)
+            vertex.add_constraint(EarConstraint())
 
         globals_variables.get_simulator().add_machine_vertex(vertex)
         if len(mv_edges)>0:
