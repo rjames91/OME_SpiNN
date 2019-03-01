@@ -265,7 +265,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         else:#angroup
             child_vertices = [self._mv_list[vertex_index] for vertex_index in self._parent_index_list[vertex_slice.lo_atom]]
             n_child_keys = len(child_vertices)
-            sdram_resource_bytes = 4*4 + 12 * n_child_keys
+            sdram_resource_bytes = 5*4 + 12 * n_child_keys
 
         container = ResourceContainer(
             sdram=SDRAMResource(
