@@ -328,8 +328,9 @@ class DRNLVertex(
             0, data_type=self._COREID_TYPE)
 
         # Write the Acknowledge key
-        spec.write_value(self._mack.get_acknowledge_key(
-            placement, routing_info))
+        # spec.write_value(self._mack.get_acknowledge_key(
+        #     placement, routing_info))
+        spec.write_value(0)
 
         # Write the key
         if len(keys)>0:

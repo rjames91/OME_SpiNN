@@ -317,7 +317,14 @@ void app_init(void)
 
 void app_end(uint null_a,uint null_b)
 {
-    if(final_ack==1)
+    log_info("All data has been sent seg_index=%d",seg_index);
+    while (!spin1_send_mc_packet(r2s_key|1, 0, WITH_PAYLOAD)) {
+        spin1_delay_us(1);
+    }
+    spin1_exit(0);
+    io_printf (IO_BUF, "spinn_exit %\n");
+
+    /*if(final_ack==1)
     {
         spin1_exit(0);
         io_printf (IO_BUF, "spinn_exit %\n");
@@ -332,13 +339,13 @@ void app_end(uint null_a,uint null_b)
 //        //ROB HACK TO REMOVE SECOND ACKS
 //        spin1_exit(0);
 //        io_printf (IO_BUF, "spinn_exit %\n");
-    }
+    }*/
 }
 //DMA read
 void data_read(uint null_a, uint null_b)
 {
 	REAL *dtcm_buffer_in;
-	if(test_DMA == TRUE && sync_count<num_macks && seg_index==0)
+/*	if(test_DMA == TRUE && sync_count<num_macks && seg_index==0)
 	{
 	    if(first_tick==true){
 		io_printf (IO_BUF, "sending r2s\n");
@@ -347,9 +354,10 @@ void data_read(uint null_a, uint null_b)
             }
             first_tick = false;
         }
-	}
+	}*/
 	//read from DMA and copy into DTCM
-	else if(read_ticks<TOTAL_TICKS && test_DMA == TRUE && sync_count==num_macks)
+//	else if(read_ticks<TOTAL_TICKS && test_DMA == TRUE && sync_count==num_macks)
+	if(read_ticks<TOTAL_TICKS && test_DMA == TRUE)
 	{
 	    #ifdef PROFILE
 	    if(seg_index==0)profiler_write_entry_disable_irq_fiq(PROFILER_ENTER | PROFILER_DMA_READ);
@@ -371,8 +379,9 @@ void data_read(uint null_a, uint null_b)
 			   SEGSIZE*sizeof(REAL));
 	}
    	// stop if desired number of ticks reached
-	else if (read_ticks >= (TOTAL_TICKS+3) && sync_count==num_macks)//+ 3 ticks to account for OME+DRNL+IHCAN processing latency
+	/*else if (read_ticks >= (TOTAL_TICKS+3))//+ 3 ticks to account for OME+DRNL+IHCAN processing latency
 	{
+
 	    if(final_ack==1)//2nd time in this call therefore
 	                    //child models have replied with finished processing acks
 	    {
@@ -384,8 +393,9 @@ void data_read(uint null_a, uint null_b)
 	        //send finished processing MC packet
             spin1_schedule_callback(app_end,NULL,NULL,2);
 	    }
-	}
-    else if (read_ticks>=TOTAL_TICKS && sync_count==num_macks) read_ticks++;//additional latency wait
+	}*/
+//    else if (read_ticks>=TOTAL_TICKS && sync_count==num_macks) read_ticks++;//additional latency wait
+    else if (read_ticks>=TOTAL_TICKS) spin1_schedule_callback(app_end,NULL,NULL,2);
 }
 
 void process_chan(REAL *in_buffer)
