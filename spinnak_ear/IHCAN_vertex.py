@@ -47,7 +47,7 @@ class IHCANVertex(
     """ A vertex that runs the DRNL algorithm
     """
     # The number of bytes for the parameters
-    _N_PARAMETER_BYTES = 12*4#
+    _N_PARAMETER_BYTES = 15*4#
     # The data type of each data element
     _DATA_ELEMENT_TYPE = DataType.FLOAT_32#DataType.FLOAT_64
     # The data type of the data count
@@ -73,10 +73,9 @@ class IHCANVertex(
                ('RECORDING', 2),
                ('PROFILE', 3)])
 
-    def __init__(self, drnl,resample_factor,seed,is_recording,# minimum_buffer_sdram,
-            #buffered_sdram_per_timestep,spike_recorder,buffer_size_before_receive,
-                 #max_spikes_per_ts,maximum_sdram_for_buffering,
-                 n_fibres=2,ear_index=0,bitfield=True,profile=True):
+    def __init__(self, drnl,resample_factor,seed,is_recording,
+                 n_fibres=2,ear_index=0,bitfield=True,profile=True,
+                 n_lsr=0,n_msr=0,n_hsr=0):
         """
         :param ome: The connected ome vertex    """
 
@@ -96,6 +95,15 @@ class IHCANVertex(
         self._resample_factor=resample_factor
         self._fs=drnl.fs
         self._n_atoms = n_fibres
+
+        if n_lsr+n_msr+n_hsr > 2:
+            raise Exception("Only 2 fibres can be modelled per IHCAN,"
+                            " currently requesting {}lsr, {}msr, {}hsr".format(n_lsr,n_msr,n_hsr))
+        self._n_lsr = n_lsr
+        self._n_msr = n_msr
+        self._n_hsr = n_hsr
+
+
         self._num_data_points = n_fibres * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
         if bitfield:
             self._recording_size = numpy.ceil((self._num_data_points/8.) * self._KEY_ELEMENT_TYPE.size)
@@ -114,19 +122,6 @@ class IHCANVertex(
         self._bitfield = bitfield
         self._profile = profile
         self._process_profile_times = None
-
-        config = globals_variables.get_simulator().config
-
-        self._time_between_requests = config.getint(
-            "Buffers", "time_between_requests")
-        self._receive_buffer_host = config.get(
-            "Buffers", "receive_buffer_host")
-        self._receive_buffer_port = helpful_functions.read_config_int(
-            config, "Buffers", "receive_buffer_port")
-        self._minimum_buffer_sdram = config.getint(
-            "Buffers", "minimum_buffer_sdram")
-        self._using_auto_pause_and_resume = config.getboolean(
-            "Buffers", "use_auto_pause_and_resume")
 
     @property
     @overrides(MachineVertex.resources_required)
@@ -261,6 +256,12 @@ class IHCANVertex(
 
         #Write is recording bool
         spec.write_value(int(self._is_recording),data_type=self._COREID_TYPE)
+
+        #Write number of spontaneous fibres
+        spec.write_value(int(self._n_lsr), data_type=self._COREID_TYPE)
+        spec.write_value(int(self._n_msr), data_type=self._COREID_TYPE)
+        spec.write_value(int(self._n_hsr), data_type=self._COREID_TYPE)
+
         #Write the seed
         data = numpy.array(self._seed, dtype=numpy.uint32)
         spec.write_array(data.view(numpy.uint32))
@@ -292,7 +293,7 @@ class IHCANVertex(
             formatted_data = numpy.array(data, dtype=numpy.uint8)
             #only interested in every 4th byte!
             formatted_data = formatted_data[::4]
-            lsr = formatted_data[0::2]
+            lsr = formatted_data[0::2]#TODO:change names as output may not correspond to lsr + hsr fibres
             hsr = formatted_data[1::2]
             unpacked_lsr = numpy.unpackbits(lsr)
             unpacked_hsr = numpy.unpackbits(hsr)
@@ -332,28 +333,3 @@ class IHCANVertex(
     def get_recording_region_base_address(self, txrx, placement):
         return helpful_functions.locate_memory_region_for_placement(
             placement, self.REGIONS.RECORDING.value, txrx)
-
-
-    # @overrides(AbstractReceiveBuffersToHost.get_recording_region_base_address)
-    # def get_recording_region_base_address(self, txrx, placement):
-    #     return helpful_functions.locate_memory_region_for_placement(
-    #         placement, self.REGIONS.RECORDING.value, txrx)
-    #
-    # @overrides(AbstractRecordable.is_recording)
-    # def is_recording(self):
-    #     return self._is_recording
-    #
-    # @overrides(AbstractReceiveBuffersToHost.get_minimum_buffer_sdram_usage)
-    # def get_minimum_buffer_sdram_usage(self):
-    #     return self._minimum_buffer_sdram
-    #
-    # @overrides(AbstractReceiveBuffersToHost.get_n_timesteps_in_buffer_space)
-    # def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
-    #     return recording_utilities.get_n_timesteps_in_buffer_space(
-    #         buffer_space, [self._buffered_sdram_per_timestep])
-    #
-    # @overrides(AbstractReceiveBuffersToHost.get_recorded_region_ids)
-    # def get_recorded_region_ids(self):
-    #     if self._is_recording:
-    #         return [0]
-    #     return []
