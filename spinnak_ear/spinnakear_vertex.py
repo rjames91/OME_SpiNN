@@ -40,6 +40,7 @@ from spinnak_ear.AN_group_vertex import ANGroupVertex
 
 import numpy as np
 import math
+import random
 import logging
 logger = logging.getLogger(__name__)
 
@@ -79,11 +80,10 @@ class SpiNNakEarVertex(ApplicationVertex,
     _N_POPULATION_RECORDING_REGIONS = 1
     _MAX_N_ATOMS_PER_CORE = 2#256
     _N_FIBRES_PER_IHCAN = 2
-    _N_LSR_PER_IHC = 3
-    _N_MSR_PER_IHC = 3
-    _N_HSR_PER_IHC = 4
+    _N_LSR_PER_IHC = 2#3
+    _N_MSR_PER_IHC = 2#3
+    _N_HSR_PER_IHC = 6#4
     _N_FIBRES_PER_IHC = _N_LSR_PER_IHC + _N_MSR_PER_IHC + _N_HSR_PER_IHC
-
 
     def __init__(
             self, n_neurons, audio_input,fs,n_channels,pole_freqs,param_file,ear_index,
@@ -442,6 +442,8 @@ class SpiNNakEarVertex(ApplicationVertex,
             for _ in range(self._N_LSR_PER_IHC):
                 fibres.append(0)
 
+            random.shuffle(fibres)
+
             for j in range(n_ihcs):
                 ihc_index = len(mv_index_list)
                 #randomly pick fibre types
@@ -468,7 +470,6 @@ class SpiNNakEarVertex(ApplicationVertex,
             if row_index>0:
                 ang_indices = [i for i, label in enumerate(mv_index_list) if label == "inter_{}".format(row_index-1)]
             else:
-                # ang_indices = [i for i, label in enumerate(mv_index_list) if label == "ihc"]
                 ang_indices = [i for i, label in enumerate(mv_index_list) if "ihc" in label]
             for an in range(n_row_angs):
                 if row_index==n_group_tree_rows-1:
