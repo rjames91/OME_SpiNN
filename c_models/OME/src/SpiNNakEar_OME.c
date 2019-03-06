@@ -138,7 +138,7 @@ uint num_macks;
 uint sampling_frequency;
 
 //application initialisation
-void app_init(void)
+bool app_init(void)
 {
     m_pi = acos(-1.0);//pi reference for filter constant calcs
 	seg_index=0;
@@ -191,8 +191,6 @@ void app_init(void)
 
     Fs= (double)sampling_frequency;
     dt=(1.0/Fs);
-//    if(rt)TIMER_TICK_PERIOD = (uint)(1e6 * ((REAL)SEGSIZE/Fs));//real-time
-//    else TIMER_TICK_PERIOD = 10000;//Not real-time
     TIMER_TICK_PERIOD = (uint)(1e6 * ((REAL)SEGSIZE/Fs) * time_scale);//scaled by simulation time scale
 
     log_info("timer period=%d",(uint)TIMER_TICK_PERIOD);
@@ -211,108 +209,111 @@ void app_init(void)
 	{
 		test_DMA = FALSE;
 		io_printf (IO_BUF, "[core %d] error - cannot allocate buffer\n", coreID);
+		return false;
 	}
 	else
 	{
-		test_DMA = TRUE;
-		// initialise buffers
-		for (uint i = 0; i < SEGSIZE; i++)
-		{
-			dtcm_buffer_a[i]   = 0;
-			dtcm_buffer_b[i]   = 0;
-		}
-		for (uint i = 0; i < SEGSIZE; i++)
-		{
-			dtcm_buffer_x[i]   = 0;
-		}
+        test_DMA = TRUE;
+        // initialise buffers
+        for (uint i = 0; i < SEGSIZE; i++)
+        {
+            dtcm_buffer_a[i]   = 0;
+            dtcm_buffer_b[i]   = 0;
+        }
+        for (uint i = 0; i < SEGSIZE; i++)
+        {
+            dtcm_buffer_x[i]   = 0;
+        }
 
         io_printf (IO_BUF, "[core %d] data spec output buffer tag= %d\n", coreID,
            (uint) placement_coreID);
 
-	//============MODEL INITIALISATION================//
-    BFlength = params.NUM_BFS;
-	conchaL=1500.0;
-	conchaH=3000.0;
-	conchaG=5.0;
-	earCanalL=3000.0;
-	earCanalH=3800.0;
-	earCanalG=5.0;
-	stapesH=700.0;
-	stapesL=10.0;
-	stapesScalar=5e-7;
-	ARtau=0.2;
-	ARdelay=0.0085;
-	ARrateThreshold=100.0;
-	rateToAttenuationFactor=0.1/BFlength;
+        //============MODEL INITIALISATION================//
+        BFlength = params.NUM_BFS;
+        conchaL=1500.0;
+        conchaH=3000.0;
+        conchaG=5.0;
+        earCanalL=3000.0;
+        earCanalH=3800.0;
+        earCanalG=5.0;
+        stapesH=700.0;
+        stapesL=10.0;
+        stapesScalar=5e-7;
+        ARtau=0.2;
+        ARdelay=0.0085;
+        ARrateThreshold=100.0;
+        rateToAttenuationFactor=0.1/BFlength;
 
-	concha_q= (REAL)m_pi * (REAL)dt * (REAL)(conchaH - conchaL);
-	concha_j= 1.0/(1.0+ (1.0/tan(concha_q)));
-	concha_k= (2.0 * cos((REAL)m_pi * (REAL)dt * (REAL)(conchaH + conchaL)))
-	            / ((1.0 + tan(concha_q)) * cos(concha_q));
-	concha_l= (tan(concha_q) - 1.0)/(tan(concha_q) + 1.0);
-	conchaGainScalar=pow(10.0,conchaG/20.0);
+        concha_q= (REAL)m_pi * (REAL)dt * (REAL)(conchaH - conchaL);
+        concha_j= 1.0/(1.0+ (1.0/tan(concha_q)));
+        concha_k= (2.0 * cos((REAL)m_pi * (REAL)dt * (REAL)(conchaH + conchaL)))
+                    / ((1.0 + tan(concha_q)) * cos(concha_q));
+        concha_l= (tan(concha_q) - 1.0)/(tan(concha_q) + 1.0);
+        conchaGainScalar=pow(10.0,conchaG/20.0);
 
-	conchaFilter_b[0]=concha_j;
-	conchaFilter_b[1]=0.0;
-	conchaFilter_b[2]=-1.0*concha_j;
-	conchaFilter_a[0]=1.0;
-	conchaFilter_a[1]=-1.0*concha_k;
-	conchaFilter_a[2]=-1.0*concha_l;
-	recip_conchaFilter_a0=1.0/conchaFilter_a[0];
+        conchaFilter_b[0]=concha_j;
+        conchaFilter_b[1]=0.0;
+        conchaFilter_b[2]=-1.0*concha_j;
+        conchaFilter_a[0]=1.0;
+        conchaFilter_a[1]=-1.0*concha_k;
+        conchaFilter_a[2]=-1.0*concha_l;
+        recip_conchaFilter_a0=1.0/conchaFilter_a[0];
 
-	earCanal_q= m_pi * dt * (earCanalH - earCanalL);
-	earCanal_j= 1.0/(1.0+ (1.0/tan(earCanal_q)));
-	earCanal_k= (2.0 * cos(m_pi * dt * (earCanalH + earCanalL))) / ((1.0 + tan(earCanal_q)) * cos(earCanal_q));
-	earCanal_l= (tan(earCanal_q) - 1.0)/(tan(earCanal_q) + 1.0);
-	earCanalGainScalar=pow(10.0,earCanalG/20.0);
+        earCanal_q= m_pi * dt * (earCanalH - earCanalL);
+        earCanal_j= 1.0/(1.0+ (1.0/tan(earCanal_q)));
+        earCanal_k= (2.0 * cos(m_pi * dt * (earCanalH + earCanalL))) / ((1.0 + tan(earCanal_q)) * cos(earCanal_q));
+        earCanal_l= (tan(earCanal_q) - 1.0)/(tan(earCanal_q) + 1.0);
+        earCanalGainScalar=pow(10.0,earCanalG/20.0);
 
-	earCanalFilter_b[0]=earCanal_j;
-	earCanalFilter_b[1]=0.0;
-	earCanalFilter_b[2]=-earCanal_j;
-	earCanalFilter_a[0]=1.0;
-	earCanalFilter_a[1]=-earCanal_k;
-	earCanalFilter_a[2]=-earCanal_l;
-	recip_earCanalFilter_a0=1.0/earCanalFilter_a[0];
+        earCanalFilter_b[0]=earCanal_j;
+        earCanalFilter_b[1]=0.0;
+        earCanalFilter_b[2]=-earCanal_j;
+        earCanalFilter_a[0]=1.0;
+        earCanalFilter_a[1]=-earCanal_k;
+        earCanalFilter_a[2]=-earCanal_l;
+        recip_earCanalFilter_a0=1.0/earCanalFilter_a[0];
 
-	//stapes filter coeffs pre generated due to butterworth calc code overflow
-	stapesHP_b[0] = params.SHB1;
-	stapesHP_b[1] = params.SHB2;
-	stapesHP_b[2] = params.SHB3;
-	stapesHP_a[0] = params.SHA1;
-	stapesHP_a[1] = params.SHA2;
-	stapesHP_a[2] = params.SHA3;
+        //stapes filter coeffs pre generated due to butterworth calc code overflow
+        stapesHP_b[0] = params.SHB1;
+        stapesHP_b[1] = params.SHB2;
+        stapesHP_b[2] = params.SHB3;
+        stapesHP_a[0] = params.SHA1;
+        stapesHP_a[1] = params.SHA2;
+        stapesHP_a[2] = params.SHA3;
 
-	stapes_tau= 1.0/ (2 * (REAL)m_pi * stapesL);
-	stapesLP_a[0]= 1.0;
-	stapesLP_a[1]= dt/stapes_tau -1.0;
-	stapesLP_b= 1.0 + stapesLP_a[1];
+        stapes_tau= 1.0/ (2 * (REAL)m_pi * stapesL);
+        stapesLP_a[0]= 1.0;
+        stapesLP_a[1]= dt/stapes_tau -1.0;
+        stapesLP_b= 1.0 + stapesLP_a[1];
 
-    //--Initialise recurring variables--/
-	past_input[0]=0.0;
-	past_input[1]=0.0;
-	past_concha[0]=0.0;
-	past_concha[1]=0.0;
+        //--Initialise recurring variables--/
+        past_input[0]=0.0;
+        past_input[1]=0.0;
+        past_concha[0]=0.0;
+        past_concha[1]=0.0;
 
-	past_earCanalInput[0]=0.0;
-	past_earCanalInput[1]=0.0;
-	past_earCanal[0]=0.0;
-	past_earCanal[1]=0.0;
+        past_earCanalInput[0]=0.0;
+        past_earCanalInput[1]=0.0;
+        past_earCanal[0]=0.0;
+        past_earCanal[1]=0.0;
 
-	ARatt=1.0; //TODO: this should be determined by spiking input
+        ARatt=1.0; //TODO: this should be determined by spiking input
 
-	past_stapesInput[0]=0.0;
-	past_stapesInput[1]=0.0;
-	past_stapes[0]=0.0;
-	past_stapes[1]=0.0;
+        past_stapesInput[0]=0.0;
+        past_stapesInput[1]=0.0;
+        past_stapes[0]=0.0;
+        past_stapes[1]=0.0;
 
-	past_stapesDisp=0.0;		
+        past_stapesDisp=0.0;
 
-#ifdef PROFILE
-    // Setup profiler
-    profiler_init(
-        data_specification_get_region(1, data_address));
-#endif
+    #ifdef PROFILE
+        // Setup profiler
+        profiler_init(
+            data_specification_get_region(1, data_address));
+    #endif
+        log_info("init complete");
 	}
+    return true;
 }
 
 void app_end(uint null_a,uint null_b)
@@ -530,22 +531,25 @@ void app_done ()
 
 void c_main()
 {
-  // Get core and chip IDs
-  coreID = spin1_get_core_id ();
-  chipID = spin1_get_chip_id ();
+    // Get core and chip IDs
+    coreID = spin1_get_core_id ();
+    chipID = spin1_get_chip_id ();
 
-  app_init();
-  //set timer tick
-  spin1_set_timer_tick (TIMER_TICK_PERIOD);
-  //setup callbacks
-  //process channel once data input has been read to DTCM
-  spin1_callback_on (DMA_TRANSFER_DONE,transfer_handler,1);
-  //reads from DMA to DTCM every tick
-  spin1_callback_on (TIMER_TICK,data_read,0);
-  //start/end of simulation syncronisation callback
-  spin1_callback_on (MC_PACKET_RECEIVED,sync_check,-1);
+    if(app_init())
+    {
+        //set timer tick
+        spin1_set_timer_tick (TIMER_TICK_PERIOD);
+        //setup callbacks
+        //process channel once data input has been read to DTCM
+        spin1_callback_on (DMA_TRANSFER_DONE,transfer_handler,1);
+        //reads from DMA to DTCM every tick
+        spin1_callback_on (TIMER_TICK,data_read,0);
+        //start/end of simulation syncronisation callback
+        log_info("setting up MC callback");
+        spin1_callback_on (MC_PACKET_RECEIVED,sync_check,-1);
 
-  spin1_start (SYNC_WAIT);
-  app_done ();
+        spin1_start (SYNC_WAIT);
+        app_done ();
+    }
 }
 
