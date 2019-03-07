@@ -40,6 +40,8 @@ uint TOTAL_TICKS;
 uint TIMER_TICK_PERIOD;
 uint final_ack;
 
+bool app_complete=false;
+
 uint_float_union MC_union;
 
 REAL conchaL,conchaH,conchaG,earCanalL,earCanalH,earCanalG,stapesH,stapesL,stapesScalar,
@@ -318,14 +320,15 @@ bool app_init(void)
 
 void app_end(uint null_a,uint null_b)
 {
+    app_complete = true;
     log_info("All data has been sent seg_index=%d",seg_index);
     //send 10 times in case the network is congested and drops packets
-    for (uint i=0;i<10;i++){
-        while (!spin1_send_mc_packet(r2s_key|1, 0, WITH_PAYLOAD)) {
-            spin1_delay_us(1);
-        }
-        spin1_delay_us(10000);//10ms
-    }
+//    for (uint i=0;i<10;i++){
+//        while (!spin1_send_mc_packet(r2s_key|1, 0, WITH_PAYLOAD)) {
+//            spin1_delay_us(1);
+//        }
+//        spin1_delay_us(10000);//10ms
+//    }
     spin1_exit(0);
     io_printf (IO_BUF, "spinn_exit %\n");
 
@@ -400,7 +403,9 @@ void data_read(uint null_a, uint null_b)
 	    }
 	}*/
 //    else if (read_ticks>=TOTAL_TICKS && sync_count==num_macks) read_ticks++;//additional latency wait
-    else if (read_ticks>=TOTAL_TICKS) spin1_schedule_callback(app_end,NULL,NULL,2);
+//    else if (read_ticks>=TOTAL_TICKS) read_ticks++;//additional latency wait
+    else if (read_ticks>=TOTAL_TICKS) spin1_schedule_callback(app_end,NULL,NULL,2);//additional latency wait
+//    else if ((read_ticks>TOTAL_TICKS + 3) && !app_complete)spin1_schedule_callback(app_end,NULL,NULL,2);
 }
 
 void process_chan(REAL *in_buffer)

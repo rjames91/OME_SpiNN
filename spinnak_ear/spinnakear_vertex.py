@@ -271,7 +271,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         else:#angroup
             child_vertices = [self._mv_list[vertex_index] for vertex_index in self._parent_index_list[vertex_slice.lo_atom]]
             n_child_keys = len(child_vertices)
-            sdram_resource_bytes = 5*4 + 12 * n_child_keys
+            sdram_resource_bytes = 6*4 + 12 * n_child_keys
 
         container = ResourceContainer(
             sdram=SDRAMResource(
@@ -431,7 +431,7 @@ class SpiNNakEarVertex(ApplicationVertex,
             parent_index_list.append([ome_index])
             edge_index_list.append([])
             #OME command
-            edge_index_list[ome_index].append((drnl_index, command_partition_dict['ome']))
+            # edge_index_list[ome_index].append((drnl_index, command_partition_dict['ome']))
             # Add the data edges (OME->DRNLs) to the ome entry in the edge list
             edge_index_list[ome_index].append((drnl_index, data_partition_dict['ome']))
             fibres = []
@@ -484,7 +484,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 for i in child_indices:
                     edge_index_list[i].append((ang_index, 'AN'))
                 #Add r2s connection from OME node
-                edge_index_list[ome_index].append((ang_index, command_partition_dict['ome']))
+                # edge_index_list[ome_index].append((ang_index, command_partition_dict['ome']))
             n_angs = n_row_angs
 
         return len(mv_index_list), mv_index_list, parent_index_list, edge_index_list, ihc_seeds, ome_indices
