@@ -319,8 +319,12 @@ bool app_init(void)
 void app_end(uint null_a,uint null_b)
 {
     log_info("All data has been sent seg_index=%d",seg_index);
-    while (!spin1_send_mc_packet(r2s_key|1, 0, WITH_PAYLOAD)) {
-        spin1_delay_us(1);
+    //send 10 times in case the network is congested and drops packets
+    for (uint i=0;i<10;i++){
+        while (!spin1_send_mc_packet(r2s_key|1, 0, WITH_PAYLOAD)) {
+            spin1_delay_us(1);
+        }
+        spin1_delay_us(10000);//10ms
     }
     spin1_exit(0);
     io_printf (IO_BUF, "spinn_exit %\n");
@@ -547,7 +551,6 @@ void c_main()
         //start/end of simulation syncronisation callback
         log_info("setting up MC callback");
         spin1_callback_on (MC_PACKET_RECEIVED,sync_check,-1);
-
         spin1_start (SYNC_WAIT);
         app_done ();
     }

@@ -413,7 +413,7 @@ class SpiNNakEarVertex(ApplicationVertex,
 
         return self._n_atoms
 
-    def calculate_n_atoms(self,n_channels,n_group_tree_rows, n_macks=4, n_ihcs=5):
+    def calculate_n_atoms(self,n_channels,n_group_tree_rows,n_ihcs=5):
         # list indices correspond to atom index
         mv_index_list = []
         edge_index_list = []  # each entry is a list of tuples containnig mv indices the mv connects to and the data partion name for the edge
