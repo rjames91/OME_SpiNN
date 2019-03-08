@@ -64,6 +64,7 @@ class ANGroupVertex(
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES + len(self._child_vertices) * self._KEY_MASK_ENTRY_SIZE_BYTES
+        sdram += constants.SYSTEM_BYTES_REQUIREMENT + 8
 
         resources = ResourceContainer(
             dtcm=DTCMResource(0),

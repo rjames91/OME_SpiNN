@@ -128,6 +128,7 @@ class IHCANVertex(
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES
         sdram += 1 * self._KEY_ELEMENT_TYPE.size
+        sdram += constants.SYSTEM_BYTES_REQUIREMENT + 8
         if self._is_recording:
             sdram += self._recording_size
         if self._profile:

@@ -253,7 +253,6 @@ class SpiNNakEarVertex(ApplicationVertex,
 
         elif vertex_label == "drnl":
             sdram_resource_bytes = 14*4
-            sdram_resource_bytes += constants.SYSTEM_BYTES_REQUIREMENT + 8
             sdram_resource_bytes += 512 * 12#key mask tab
             sdram_resource_bytes += 8 * 8
             sdram_resource_bytes += 256 #max n bytes for conn_lut
@@ -276,7 +275,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         container = ResourceContainer(
             sdram=SDRAMResource(
                 sdram_resource_bytes +
-                front_end_common_constants.SYSTEM_BYTES_REQUIREMENT),
+                front_end_common_constants.SYSTEM_BYTES_REQUIREMENT)+ 8,
             dtcm=DTCMResource(0),
             cpu_cycles=CPUCyclesPerTickResource(0))
             #,reverse_iptags=reverse_iptags)
