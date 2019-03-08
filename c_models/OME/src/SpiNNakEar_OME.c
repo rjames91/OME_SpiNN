@@ -78,6 +78,13 @@ REAL *sdramin_buffer;
 REAL *sdramout_buffer;
 REAL *profile_buffer;
 
+//data spec regions
+typedef enum regions {
+    SYSTEM,
+    PARAMS,
+    RECORDING,
+    PROFILER}regions;
+
 // The parameters to be read from memory
 enum params_enum {
     DATA_SIZE = 0,
@@ -151,8 +158,17 @@ bool app_init(void)
 	io_printf (IO_BUF, "[core %d] starting simulation\n", coreID);
 	//obtain data spec
 	address_t data_address = data_specification_get_data_address();
-    address_t parameters_address = data_specification_get_region(0, data_address);
-    address_t params_enum = data_specification_get_region(0, data_address);
+
+    // Get the timing details and set up the simulation interface
+    if (!simulation_initialise(
+            data_specification_get_region(SYSTEM, data_address),
+            APPLICATION_NAME_HASH, NULL, NULL,
+            NULL, 1, 0)) {
+        return false;
+    }
+
+    address_t parameters_address = data_specification_get_region(PARAMS, data_address);
+    address_t params_enum = data_specification_get_region(PARAMS, data_address);
 
     struct parameters *ome_params = (struct parameters *) parameters_address;
         spin1_memcpy(&params, ome_params, sizeof(struct parameters));
@@ -329,7 +345,9 @@ void app_end(uint null_a,uint null_b)
 //        }
 //        spin1_delay_us(10000);//10ms
 //    }
-    spin1_exit(0);
+//    spin1_exit(0);
+    app_done ();
+    simulation_ready_to_read();
     io_printf (IO_BUF, "spinn_exit %\n");
 
     /*if(final_ack==1)
@@ -404,7 +422,7 @@ void data_read(uint null_a, uint null_b)
 	}*/
 //    else if (read_ticks>=TOTAL_TICKS && sync_count==num_macks) read_ticks++;//additional latency wait
 //    else if (read_ticks>=TOTAL_TICKS) read_ticks++;//additional latency wait
-    else if (read_ticks>=TOTAL_TICKS) spin1_schedule_callback(app_end,NULL,NULL,2);//additional latency wait
+    else if (read_ticks>=TOTAL_TICKS && !app_complete) spin1_schedule_callback(app_end,NULL,NULL,2);//additional latency wait
 //    else if ((read_ticks>TOTAL_TICKS + 3) && !app_complete)spin1_schedule_callback(app_end,NULL,NULL,2);
 }
 
@@ -524,12 +542,12 @@ void app_done ()
   profiler_write_entry_disable_irq_fiq(PROFILER_EXIT | PROFILER_DMA_READ);
   profiler_finalise();
 #endif
-	log_info("b0:%k",(accum)conchaFilter_b[0]);
-    log_info("b1:%k",(accum)conchaFilter_b[1]);
-    log_info("b2:%k",(accum)conchaFilter_b[2]);
-	log_info("a0:%k",(accum)conchaFilter_a[0]);
-	log_info("a1:%k",(accum)conchaFilter_a[1]);
-    log_info("a2:%k",(accum)conchaFilter_a[2]);
+	log_info("b0:%k",(accum)stapesHP_b[0]);
+    log_info("b1:%k",(accum)stapesHP_b[1]);
+    log_info("b2:%k",(accum)stapesHP_b[2]);
+	log_info("a0:%k",(accum)stapesHP_a[0]);
+	log_info("a1:%k",(accum)stapesHP_a[1]);
+    log_info("a2:%k",(accum)stapesHP_a[2]);
   // report simulation time
   io_printf (IO_BUF, "[core %d] simulation lasted %d ticks\n", coreID,
              spin1_get_simulation_time());
@@ -554,10 +572,11 @@ void c_main()
         //reads from DMA to DTCM every tick
         spin1_callback_on (TIMER_TICK,data_read,0);
         //start/end of simulation syncronisation callback
-        log_info("setting up MC callback");
-        spin1_callback_on (MC_PACKET_RECEIVED,sync_check,-1);
-        spin1_start (SYNC_WAIT);
-        app_done ();
+//        log_info("setting up MC callback");
+//        spin1_callback_on (MC_PACKET_RECEIVED,sync_check,-1);
+//        spin1_start (SYNC_WAIT);
+        simulation_run();
+//        app_done ();
     }
 }
 

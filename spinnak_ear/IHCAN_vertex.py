@@ -168,16 +168,16 @@ class IHCANVertex(
         "tags": "MemoryTags",
         "placements": "MemoryPlacements",
         "machine_graph":"MemoryMachineGraph",
-        "n_machine_time_steps": "TotalMachineTimeSteps",
         "machine_time_step": "MachineTimeStep",
+        "time_scale_factor": "TimeScaleFactor",
     })
     @overrides(
         AbstractGeneratesDataSpecification.generate_data_specification,
         additional_arguments=["routing_info", "tags", "placements","machine_graph"
-                              ,"n_machine_time_steps","graph_mapper","machine_time_step"])
+                              ,"machine_time_step","time_scale_factor"])
     def generate_data_specification(
             self, spec, placement, routing_info, tags, placements,machine_graph,
-            n_machine_time_steps,machine_time_step):
+            machine_time_step,time_scale_factor):
 
         DRNL_placement=placements.get_placement_of_vertex(self._drnl).p
 
@@ -206,8 +206,8 @@ class IHCANVertex(
         # simulation.c requirements
         spec.switch_write_focus(self.REGIONS.SYSTEM.value)
         spec.write_array(simulation_utilities.get_simulation_header_array(
-            self.get_binary_file_name(), 1,
-            1))
+            self.get_binary_file_name(), machine_time_step,
+            time_scale_factor))
 
         #write parameters
         spec.switch_write_focus(self.REGIONS.PARAMETERS.value)

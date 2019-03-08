@@ -37,7 +37,7 @@ class ANGroupVertex(
     _KEY_MASK_ENTRY_DTYPE = [
         ("key", "<u4"), ("mask", "<u4"),("offset", "<u4")]
     _KEY_MASK_ENTRY_SIZE_BYTES = 12
-    _N_PARAMETER_BYTES = 6 * 4
+    _N_PARAMETER_BYTES = 5 * 4
 
     REGIONS = Enum(
         value="REGIONS",
@@ -88,15 +88,14 @@ class ANGroupVertex(
         "tags": "MemoryTags",
         "placements": "MemoryPlacements",
         "machine_graph":"MemoryMachineGraph",
-        "n_machine_time_steps": "TotalMachineTimeSteps"
     })
 
     @overrides(
         AbstractGeneratesDataSpecification.generate_data_specification,
-        additional_arguments=["machine_time_step", "time_scale_factor","routing_info", "tags", "placements","machine_graph","n_machine_time_steps"])
+        additional_arguments=["machine_time_step", "time_scale_factor","routing_info", "tags", "placements","machine_graph"])
     def generate_data_specification(
             self, spec, placement, machine_time_step,
-            time_scale_factor, routing_info, tags, placements,machine_graph,n_machine_time_steps):
+            time_scale_factor, routing_info, tags, placements,machine_graph):
 
         # Setup words + 1 for flags + 1 for recording size
         setup_size = constants.SYSTEM_BYTES_REQUIREMENT + 8
@@ -117,10 +116,6 @@ class ANGroupVertex(
             time_scale_factor))
 
         spec.switch_write_focus(self.REGIONS.PARAMETERS.value)
-
-        #write the total number of simulation ticks
-        spec.write_value(n_machine_time_steps,data_type=self._KEY_ELEMENT_TYPE)
-
 
         #Write the number of child nodes
         spec.write_value(len(self._child_vertices),data_type=self._KEY_ELEMENT_TYPE)

@@ -229,16 +229,19 @@ class DRNLVertex(
         return profiles
 
     @inject_items({
+        "machine_time_step": "MachineTimeStep",
+        "time_scale_factor": "TimeScaleFactor",
         "routing_info": "MemoryRoutingInfos",
         "tags": "MemoryTags",
-        "placements": "MemoryPlacements"
+        "placements": "MemoryPlacements",
     })
 
     @overrides(
         AbstractGeneratesDataSpecification.generate_data_specification,
-        additional_arguments=["routing_info", "tags", "placements"])
+        additional_arguments=["machine_time_step", "time_scale_factor","routing_info", "tags", "placements"])
     def generate_data_specification(
-            self, spec, placement, routing_info, tags, placements):
+            self, spec, placement,machine_time_step,
+            time_scale_factor, routing_info, tags, placements):
 
         OME_placement=placements.get_placement_of_vertex(self._ome).p
         self._placement = placements.get_placement_of_vertex(self)
@@ -294,8 +297,8 @@ class DRNLVertex(
         # simulation.c requirements
         spec.switch_write_focus(self.REGIONS.SYSTEM.value)
         spec.write_array(simulation_utilities.get_simulation_header_array(
-            self.get_binary_file_name(), 1,
-            1))
+            self.get_binary_file_name(), machine_time_step,
+            time_scale_factor))
 
         spec.switch_write_focus(self.REGIONS.PARAMETERS.value)
 

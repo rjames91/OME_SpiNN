@@ -36,13 +36,13 @@ import scipy.signal as sig
 from scipy.io import loadmat
 
 from spinn_utilities.progress_bar import ProgressBar
-from spynnaker.pyNN.utilities import constants
-from spinn_front_end_common.utilities import helpful_functions
+from spinn_front_end_common.utilities import helpful_functions, constants
 from spinn_front_end_common.interface.profiling import profile_utils
 from spinn_front_end_common.utilities import globals_variables
 from spinn_front_end_common.interface.profiling.abstract_has_profile_data \
     import AbstractHasProfileData
 from spinn_front_end_common.interface.profiling import profile_utils
+from spinn_front_end_common.interface.simulation import simulation_utilities
 
 class OMEVertex(
         MachineVertex,
@@ -67,6 +67,13 @@ class OMEVertex(
     _KEY_ELEMENT_TYPE = DataType.UINT32
     # the data type of the coreID
     _COREID_TYPE = DataType.UINT32
+
+    REGIONS = Enum(
+        value="REGIONS",
+        names=[('SYSTEM', 0),
+               ('PARAMETERS', 1),
+               ('RECORDING', 2),
+               ('PROFILE', 3)])
 
     PROFILE_TAG_LABELS = {
         0: "TIMER",
@@ -179,7 +186,8 @@ class OMEVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
-        return ExecutableType.SYNC
+        # return ExecutableType.SYNC
+        return ExecutableType.USES_SIMULATION_INTERFACE
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
@@ -207,10 +215,17 @@ class OMEVertex(
     def generate_data_specification(
             self, spec, placement, routing_info, tags, placements):
 
+        # Setup words + 1 for flags + 1 for recording size
+        setup_size = constants.SYSTEM_BYTES_REQUIREMENT + 8
+        # reserve system region
+        spec.reserve_memory_region(
+            region=self.REGIONS.SYSTEM.value,
+            size=setup_size, label='systemInfo')
+
         # Reserve and write the parameters region
         region_size = self._N_PARAMETER_BYTES + self._data_size
         region_size += len(self._drnl_vertices) * self._KEY_ELEMENT_TYPE.size
-        spec.reserve_memory_region(0, region_size)
+        spec.reserve_memory_region(self.REGIONS.PARAMETERS.value, region_size)
 
         if self._profile:
             #reserve profile region
@@ -218,7 +233,13 @@ class OMEVertex(
                 spec, 1,
                 self._n_profile_samples)
 
-        spec.switch_write_focus(0)
+        # simulation.c requirements
+        spec.switch_write_focus(self.REGIONS.SYSTEM.value)
+        spec.write_array(simulation_utilities.get_simulation_header_array(
+            self.get_binary_file_name(), 1,
+            1))
+
+        spec.switch_write_focus(self.REGIONS.PARAMETERS.value)
 
         # Get the placement of the vertices and find out how many chips
         # are needed
@@ -266,30 +287,34 @@ class OMEVertex(
             raise Exception("no ome key generated!")
 
         # write the command key
-        command_key = routing_info.get_first_key_from_pre_vertex(
-            self,self._command_partition_name)
-        spec.write_value(command_key, data_type=DataType.UINT32)
-
+        # command_key = routing_info.get_first_key_from_pre_vertex(
+        #     self,self._command_partition_name)
+        # spec.write_value(command_key, data_type=DataType.UINT32)
+        spec.write_value(0, data_type=DataType.UINT32) #TODO: remove
 
         spec.write_value(self._time_scale,data_type=DataType.UINT32)
-
 
         # write the stapes high pass filter coefficients
         spec.write_value(
             0, data_type=DataType.UINT32)#TODO:why is this needed?
 
-        spec.write_value(
-            self._shb[0], data_type=self._DATA_ELEMENT_TYPE)
-        spec.write_value(
-            self._shb[1], data_type=self._DATA_ELEMENT_TYPE)
-        spec.write_value(
-            self._shb[2], data_type=self._DATA_ELEMENT_TYPE)
-        spec.write_value(
-            self._sha[0], data_type=self._DATA_ELEMENT_TYPE)
-        spec.write_value(
-            self._sha[1], data_type=self._DATA_ELEMENT_TYPE)
-        spec.write_value(
-            self._sha[2], data_type=self._DATA_ELEMENT_TYPE)
+        # write the filter params
+        for param in self._shb:
+            spec.write_value(param,data_type=DataType.FLOAT_64)
+        for param in self._sha:
+            spec.write_value(param,data_type=DataType.FLOAT_64)
+        # spec.write_value(
+        #     self._shb[0], data_type=self._DATA_ELEMENT_TYPE)
+        # spec.write_value(
+        #     self._shb[1], data_type=self._DATA_ELEMENT_TYPE)
+        # spec.write_value(
+        #     self._shb[2], data_type=self._DATA_ELEMENT_TYPE)
+        # spec.write_value(
+        #     self._sha[0], data_type=self._DATA_ELEMENT_TYPE)
+        # spec.write_value(
+        #     self._sha[1], data_type=self._DATA_ELEMENT_TYPE)
+        # spec.write_value(
+        #     self._sha[2], data_type=self._DATA_ELEMENT_TYPE)
 
         # Write the data - Arrays must be 32-bit values, so convert
         data = numpy.array(self._data, dtype=self._NUMPY_DATA_ELEMENT_TYPE)
@@ -297,7 +322,7 @@ class OMEVertex(
 
         if self._profile:
             profile_utils.write_profile_region_data(
-                spec, 1, self._n_profile_samples)
+                spec, self.REGIONS.PROFILE.value, self._n_profile_samples)
 
         # End the specification
         spec.end_specification()
