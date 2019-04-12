@@ -275,7 +275,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         container = ResourceContainer(
             sdram=SDRAMResource(
                 sdram_resource_bytes +
-                front_end_common_constants.SYSTEM_BYTES_REQUIREMENT)+ 8,
+                front_end_common_constants.SYSTEM_BYTES_REQUIREMENT+ 8),
             dtcm=DTCMResource(0),
             cpu_cycles=CPUCyclesPerTickResource(0))
             #,reverse_iptags=reverse_iptags)

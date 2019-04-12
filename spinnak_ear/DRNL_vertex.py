@@ -99,8 +99,9 @@ class DRNLVertex(
         self._moc_vertices = list()
 
         self._num_data_points = ome.n_data_points
+        self._n_moc_data_points = int((self._num_data_points/(self._fs/1000.))/10)*10
         self._recording_size = (
-            self._num_data_points * DataType.FLOAT_64.size +
+             self._n_moc_data_points * DataType.FLOAT_64.size +
             self._DATA_COUNT_TYPE.size
         )
 
@@ -254,7 +255,7 @@ class DRNLVertex(
             key_and_mask = routing_info.get_routing_info_from_pre_vertex(moc,'SPIKE').first_key_and_mask
             key_and_mask_table[i]['key']=key_and_mask.key
             key_and_mask_table[i]['mask']=key_and_mask.mask
-            key_and_mask_table[i]['conn_index']=len(conn_lut)
+            key_and_mask_table[i]['conn_index']=int(len(conn_lut)/32)
             for id in conn_matrix:
                 conn_lut.append(id.item())
 
@@ -424,19 +425,17 @@ class DRNLVertex(
         output_data = formatted_data.copy()
         output_length = len(output_data)
 
-
         #check all expected data has been recorded
-        if output_length != self._num_data_points:
+        if output_length != self._n_moc_data_points:
             #if not set output to zeros of correct length, this will cause an error flag in run_ear.py
             #raise Warning
             print("recording not complete, reduce Fs or disable RT!\n"
                             "recorded output length:{}, expected length:{} "
                             "at placement:{},{},{}".format(len(output_data),
-                            self._num_data_points,placement.x,placement.y,placement.p))
+                            self._n_moc_data_points,placement.x,placement.y,placement.p))
 
-            # output_data = numpy.zeros(self._num_data_points)
-            output_data.resize(self._num_data_points,refcheck=False)
-        #return formatted_data
+            # output_data = numpy.zeros(self._n_moc_data_points)
+            output_data.resize(self._n_moc_data_points,refcheck=False)
         return output_data
 
     def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):

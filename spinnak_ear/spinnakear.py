@@ -60,7 +60,7 @@ def naive_n_chips_calc(n_channels,n_ears,neuron_pops=None,n_macks=4,n_an_group=2
             neuron_cores += int(np.ceil(float(n_atoms)/n_per_core))
         n_chips_total += (n_ears * int(np.ceil(neuron_cores/n_cores_per_chip)))
 
-    return n_chips_total
+    return n_chips_total*2
 
 
 
