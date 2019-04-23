@@ -251,11 +251,20 @@ class DRNLVertex(
         n_moc_mvs = len(self._moc_vertices)
         key_and_mask_table = numpy.zeros(n_moc_mvs, dtype=self._KEY_MASK_ENTRY_DTYPE)
         conn_lut = []
+        conn_matrix_dict = {}
         for i,(moc,conn_matrix) in enumerate(self._moc_vertices):
             key_and_mask = routing_info.get_routing_info_from_pre_vertex(moc,'SPIKE').first_key_and_mask
             key_and_mask_table[i]['key']=key_and_mask.key
             key_and_mask_table[i]['mask']=key_and_mask.mask
-            key_and_mask_table[i]['conn_index']=int(len(conn_lut)/32)
+            # key_and_mask_table[i]['conn_index']=int(len(conn_lut)/32)
+            # for id in conn_matrix:
+            #     conn_lut.append(id.item())
+            conn_matrix_dict[str(key_and_mask.key)] = conn_matrix
+
+        key_and_mask_table.sort(axis=0, order='key')
+        for i,entry in enumerate(key_and_mask_table):
+            conn_matrix = conn_matrix_dict[str(entry['key'])]
+            key_and_mask_table[i]['conn_index'] = int(len(conn_lut) / 32)
             for id in conn_matrix:
                 conn_lut.append(id.item())
 
