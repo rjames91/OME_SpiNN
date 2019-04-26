@@ -299,7 +299,7 @@ class IHCANVertex(
             unpacked_lsr = numpy.unpackbits(lsr)
             unpacked_hsr = numpy.unpackbits(hsr)
             # output_data = [unpacked_lsr.astype(numpy.float32),unpacked_hsr.astype(numpy.float32)]
-            output_data = [numpy.nonzero(unpacked_lsr)[0]*(1000./self._fs),numpy.nonzero(unpacked_hsr)[0]*(1000./self._fs)]
+            output_data = numpy.asarray([numpy.nonzero(unpacked_lsr)[0]*(1000./self._fs),numpy.nonzero(unpacked_hsr)[0]*(1000./self._fs)])
             output_length = unpacked_hsr.size + unpacked_lsr.size
 
         else:
@@ -312,7 +312,7 @@ class IHCANVertex(
 
         #check all expected data has been recorded
         if output_length != self._num_data_points:
-            #if not set output to zeros of correct length, this will cause an error flag in run_ear.py
+            #if output not set to correct length it will cause an error flag in run_ear.py
             #raise Warning
             print("recording not complete, reduce Fs or disable RT!\n"
                             "recorded output length:{}, expected length:{} "
