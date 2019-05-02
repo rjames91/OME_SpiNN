@@ -316,7 +316,7 @@ class IHCANVertex(
             #raise Warning
             print("recording not complete, reduce Fs or disable RT!\n"
                             "recorded output length:{}, expected length:{} "
-                            "at placement:{},{},{}".format(len(output_data),
+                            "at placement:{},{},{}".format(output_length,
                             self._num_data_points,placement.x,placement.y,placement.p))
 
             # output_data = numpy.zeros(self._num_data_points)
