@@ -115,6 +115,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         if pole_freqs is None:
             max_power = min([np.log10(self.fs/2.),4.25])
             self.pole_freqs = np.flipud(np.logspace(np.log10(30),max_power,self.n_channels))
+            # self.pole_freqs = np.asarray(np.logspace(np.log10(30),max_power,self.n_channels))
         else:
             self.pole_freqs = pole_freqs
         self._seed_index = 0
@@ -204,7 +205,8 @@ class SpiNNakEarVertex(ApplicationVertex,
                 progress.update()
                 for fibre in channel_fibres:
                     recorded_output.append(fibre)
-            output_data[variable]=np.flipud(recorded_output)
+            output_data[variable]=np.asarray(recorded_output)
+            # output_data[variable]=np.flipud(recorded_output)
             progress.end()
         return output_data
 
@@ -468,7 +470,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 ang_indices = [i for i, label in enumerate(mv_index_list) if label == "inter_{}".format(row_index-1)]
             else:
                 ang_indices = [i for i, label in enumerate(mv_index_list) if "ihc" in label]
-                ang_indices.reverse()#reverse so lowest freq fibres is neuron index 0
+                # ang_indices.reverse()#reverse so lowest freq fibres is neuron index 0
             for an in range(n_row_angs):
                 if row_index==n_group_tree_rows-1:
                     mv_index_list.append("group_{}".format(row_index))
