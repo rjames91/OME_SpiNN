@@ -230,10 +230,11 @@ class IHCANVertex(
         spec.write_value(
             0, data_type=self._COREID_TYPE)
 
-        # Write the Acknowledge key
-        spec.write_value(0)
+        # Write the DRNL data key
+        # spec.write_value(0)
         # spec.write_value(self._drnl.get_acknowledge_key(
         #     placement, routing_info))
+        spec.write_value(self._drnl.get_data_key(routing_info))
 
         #Write the spike resample factor
         spec.write_value(

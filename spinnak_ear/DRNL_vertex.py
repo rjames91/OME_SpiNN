@@ -125,6 +125,11 @@ class DRNLVertex(
             placement.vertex, self._acknowledge_partition_name)
         return key
 
+    def get_data_key(self,routing_info):
+        key = routing_info.get_first_key_from_pre_vertex(
+            self,self._data_partition_name)
+        return key
+
     def add_moc_vertex(self,vertex,conn_matrix):
         self._moc_vertices.append((vertex,conn_matrix))
 
