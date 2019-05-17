@@ -1,7 +1,8 @@
 from pacman.model.graphs.machine import MachineVertex
 from pacman.model.resources.resource_container import ResourceContainer
 from pacman.model.resources.dtcm_resource import DTCMResource
-from pacman.model.resources.sdram_resource import SDRAMResource
+# from pacman.model.resources.sdram_resource import SDRAMResource
+from pacman.model.resources import ConstantSDRAM
 from pacman.model.resources.cpu_cycles_per_tick_resource \
     import CPUCyclesPerTickResource
 from pacman.model.decorators.overrides import overrides
@@ -32,9 +33,6 @@ from spinn_front_end_common.interface.simulation import simulation_utilities
 from spinn_front_end_common.interface.profiling.profile_data \
     import ProfileData
 
-from spinn_front_end_common.abstract_models import AbstractRecordable
-from spinn_front_end_common.utilities import globals_variables
-
 from enum import Enum
 import numpy
 
@@ -43,6 +41,7 @@ class IHCANVertex(
         AbstractGeneratesDataSpecification,
         AbstractProvidesNKeysForPartition,
         AbstractHasProfileData,
+        AbstractReceiveBuffersToHost
         ):
     """ A vertex that runs the DRNL algorithm
     """
@@ -129,14 +128,13 @@ class IHCANVertex(
         sdram = self._N_PARAMETER_BYTES
         sdram += 1 * self._KEY_ELEMENT_TYPE.size
         sdram += constants.SYSTEM_BYTES_REQUIREMENT + 8
-        if self._is_recording:
-            sdram += self._recording_size
+        sdram += self._recording_size
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 
         resources = ResourceContainer(
             dtcm=DTCMResource(0),
-            sdram=SDRAMResource(sdram),
+            sdram=ConstantSDRAM(sdram),
             cpu_cycles=CPUCyclesPerTickResource(0),
             iptags=[], reverse_iptags=[])
         return resources
@@ -194,10 +192,9 @@ class IHCANVertex(
         spec.reserve_memory_region(self.REGIONS.PARAMETERS.value, region_size)
 
         #reserve recording region
-        if self._is_recording:
-            spec.reserve_memory_region(
-                self.REGIONS.RECORDING.value,
-                recording_utilities.get_recording_header_size(1))
+        spec.reserve_memory_region(
+            self.REGIONS.RECORDING.value,
+            recording_utilities.get_recording_header_size(1))
         if self._profile:
             #reserve profile region
             profile_utils.reserve_profile_region(
@@ -269,11 +266,10 @@ class IHCANVertex(
         spec.write_array(data.view(numpy.uint32))
 
         # Write the recording regions
-        if self._is_recording:
-            spec.switch_write_focus(self.REGIONS.RECORDING.value)
-            ip_tags = tags.get_ip_tags_for_vertex(self) or []
-            spec.write_array(recording_utilities.get_recording_header_array(
-                [self._recording_size], ip_tags=ip_tags))
+        spec.switch_write_focus(self.REGIONS.RECORDING.value)
+        ip_tags = tags.get_ip_tags_for_vertex(self) or []
+        spec.write_array(recording_utilities.get_recording_header_array(
+            [self._recording_size], ip_tags=ip_tags))
 
         #Write profile regions
         if self._profile:
@@ -288,8 +284,9 @@ class IHCANVertex(
         """ Read back the spikes """
 
         # Read the data recorded
-        data_values, _ = buffer_manager.get_data_for_vertex(placement, 0)
-        data = data_values.read_all()
+        # data_values, _ = buffer_manager.get_data_for_vertex(placement, 0)
+        # data = data_values.read_all()
+        data, _ = buffer_manager.get_data_by_placement(placement, 0)
 
         if self._bitfield:
             formatted_data = numpy.array(data, dtype=numpy.uint8)
@@ -330,7 +327,11 @@ class IHCANVertex(
             buffer_space, 4)
 
     def get_recorded_region_ids(self):
-        return [0]
+        if self._is_recording:
+            regions = [0]
+        else:
+            regions = []
+        return regions
 
     def get_recording_region_base_address(self, txrx, placement):
         return helpful_functions.locate_memory_region_for_placement(

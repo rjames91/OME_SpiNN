@@ -2,7 +2,7 @@ from pacman.model.graphs.application.application_vertex import ApplicationVertex
 from spynnaker.pyNN.models.abstract_models.abstract_accepts_incoming_synapses import AbstractAcceptsIncomingSynapses
 from pacman.model.graphs.common.constrained_object import ConstrainedObject
 from pacman.model.decorators.overrides import overrides
-from pacman.model.resources import ResourceContainer,SDRAMResource,CPUCyclesPerTickResource,ReverseIPtagResource,DTCMResource
+from pacman.model.resources import ResourceContainer,ConstantSDRAM,CPUCyclesPerTickResource,ReverseIPtagResource,DTCMResource
 from pacman.model.constraints.partitioner_constraints.fixed_vertex_atoms_constraint import FixedVertexAtomsConstraint
 from pacman.model.graphs.machine.machine_edge import MachineEdge
 from pacman.model.constraints.placer_constraints import SameChipAsConstraint,EarConstraint
@@ -79,6 +79,7 @@ class SpiNNakEarVertex(ApplicationVertex,
     SPIKE_RECORDING_REGION_ID = 0
     _N_POPULATION_RECORDING_REGIONS = 1
     _MAX_N_ATOMS_PER_CORE = 2#256
+    _FINAL_ROW_N_ATOMS = 256
     _N_FIBRES_PER_IHCAN = 2
     _N_LSR_PER_IHC = 2#3
     _N_MSR_PER_IHC = 2#3
@@ -106,10 +107,10 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._ear_index=ear_index
         self._n_group_tree_rows = int(np.ceil(math.log((n_channels*self._N_FIBRES_PER_IHC)/self._N_FIBRES_PER_IHCAN, self._MAX_N_ATOMS_PER_CORE)))
         self._max_n_atoms_per_group_tree_row = (self._MAX_N_ATOMS_PER_CORE ** np.arange(1,self._n_group_tree_rows+1)) * self._N_FIBRES_PER_IHCAN
-        self._max_n_atoms_per_group_tree_row = self._max_n_atoms_per_group_tree_row[self._max_n_atoms_per_group_tree_row <= 256]
+        self._max_n_atoms_per_group_tree_row = self._max_n_atoms_per_group_tree_row[self._max_n_atoms_per_group_tree_row <= self._FINAL_ROW_N_ATOMS]
         self._n_group_tree_rows = self._max_n_atoms_per_group_tree_row.size
-        self._is_recording_spikes = False
-        self._is_recording_moc = False
+        self._is_recording_spikes = True#hack to force recording False
+        self._is_recording_moc = True#hack to force recording False
 
         self._mv_list = []#append to each time create_machine_vertex is called
         if pole_freqs is None:
@@ -229,15 +230,14 @@ class SpiNNakEarVertex(ApplicationVertex,
         return 1
 
     @inject_items({
-        "n_machine_time_steps": "TotalMachineTimeSteps",
         "machine_time_step": "MachineTimeStep"
     })
     @overrides(
         ApplicationVertex.get_resources_used_by_atoms,
-        additional_arguments={"n_machine_time_steps", "machine_time_step"}
+        additional_arguments={"machine_time_step"}
     )
     def get_resources_used_by_atoms(
-            self, vertex_slice, n_machine_time_steps, machine_time_step):
+            self, vertex_slice,  machine_time_step):
         vertex_label = self._mv_index_list[vertex_slice.lo_atom]
         if vertex_label == "ome":
             sdram_resource_bytes = (9*4) + (6*8) + self._data_size_bytes
@@ -274,7 +274,7 @@ class SpiNNakEarVertex(ApplicationVertex,
             sdram_resource_bytes = 5*4 + 12 * n_child_keys
 
         container = ResourceContainer(
-            sdram=SDRAMResource(
+            sdram=ConstantSDRAM(
                 sdram_resource_bytes +
                 front_end_common_constants.SYSTEM_BYTES_REQUIREMENT+ 8),
             dtcm=DTCMResource(0),
@@ -316,16 +316,15 @@ class SpiNNakEarVertex(ApplicationVertex,
 
 
     @inject_items({
-        "n_machine_time_steps": "TotalMachineTimeSteps",
         "machine_time_step": "MachineTimeStep"
     })
     @overrides(
         ApplicationVertex.create_machine_vertex,
-        additional_arguments={"n_machine_time_steps", "machine_time_step"}
+        additional_arguments={"machine_time_step"}
     )
     def create_machine_vertex(
             self, vertex_slice,
-            resources_required,n_machine_time_steps,
+            resources_required,
             machine_time_step,  # @UnusedVariable
             label=None, constraints=None):
         #lookup relevant mv type, parent mv and edges associated with this atom
