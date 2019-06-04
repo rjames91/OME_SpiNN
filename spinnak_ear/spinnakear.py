@@ -41,21 +41,18 @@ class SpiNNakEar(AbstractPyNNModel):
 
 #naive in that it assumes the mack or an group cores won't fit onto exisitng chips (an overestimate of n_chips)
 def naive_n_chips_calc(n_channels,n_ears,neuron_pops=None,n_macks=4,n_an_group=2,n_cores_per_chip=15.):
-    n_mack_tree_rows = int(np.ceil(math.log(n_channels,n_macks)))
-    acc=0.
-    for i in range(n_mack_tree_rows-1):
-        acc += n_macks**i
-    mack_chips = int(np.ceil(acc/n_cores_per_chip))
+
     ome_drnl_ihc_chips = 1+int(np.ceil(n_channels/2.))
     n_group_tree_rows = int(np.ceil(math.log((n_channels * 10) / 2., 2.)))
     max_n_atoms_per_group_tree_row = (2. ** np.arange(1,n_group_tree_rows + 1)) * 2.
     max_n_atoms_per_group_tree_row = max_n_atoms_per_group_tree_row[max_n_atoms_per_group_tree_row < 256]
     n_group_tree_rows = max_n_atoms_per_group_tree_row.size
+    acc = 0
     for i in range(n_group_tree_rows-1):
         acc += n_an_group**i
     an_group_chips = int(np.ceil(acc/n_cores_per_chip))
 
-    n_chips_total = n_ears*(ome_drnl_ihc_chips+mack_chips+an_group_chips)
+    n_chips_total = n_ears*(ome_drnl_ihc_chips+an_group_chips)
 
     if neuron_pops is not None:
         neuron_cores = 0
@@ -63,7 +60,7 @@ def naive_n_chips_calc(n_channels,n_ears,neuron_pops=None,n_macks=4,n_an_group=2
             neuron_cores += int(np.ceil(float(n_atoms)/n_per_core))
         n_chips_total += (n_ears * int(np.ceil(neuron_cores/n_cores_per_chip)))
 
-    return n_chips_total*2# double requested number (seems to fix issues with larger sims)
+    return n_chips_total*2
 
 
 

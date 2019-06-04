@@ -1,7 +1,8 @@
 from pacman.model.graphs.machine import MachineVertex
 from pacman.model.resources.resource_container import ResourceContainer
 from pacman.model.resources.dtcm_resource import DTCMResource
-from pacman.model.resources.sdram_resource import SDRAMResource
+# from pacman.model.resources.sdram_resource import SDRAMResource
+from pacman.model.resources import ConstantSDRAM
 from pacman.model.resources.cpu_cycles_per_tick_resource \
     import CPUCyclesPerTickResource
 from pacman.model.decorators.overrides import overrides
@@ -40,7 +41,8 @@ class DRNLVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
         AbstractProvidesNKeysForPartition,
-        AbstractHasProfileData
+        AbstractHasProfileData,
+        AbstractReceiveBuffersToHost
         ):
     """ A vertex that runs the DRNL algorithm
     """
@@ -99,8 +101,9 @@ class DRNLVertex(
         self._moc_vertices = list()
 
         self._num_data_points = ome.n_data_points
+        self._n_moc_data_points = int((self._num_data_points/(self._fs/1000.))/10)*10
         self._recording_size = (
-            self._num_data_points * DataType.FLOAT_64.size +
+             self._n_moc_data_points * DataType.FLOAT_64.size +
             self._DATA_COUNT_TYPE.size
         )
 
@@ -122,6 +125,11 @@ class DRNLVertex(
     def get_acknowledge_key(self, placement, routing_info):
         key = routing_info.get_first_key_from_pre_vertex(
             placement.vertex, self._acknowledge_partition_name)
+        return key
+
+    def get_data_key(self,routing_info):
+        key = routing_info.get_first_key_from_pre_vertex(
+            self,self._data_partition_name)
         return key
 
     def add_moc_vertex(self,vertex,conn_matrix):
@@ -193,14 +201,14 @@ class DRNLVertex(
         sdram += len(self._moc_vertices) * self._KEY_MASK_ENTRY_SIZE_BYTES
         sdram += len(self._moc_vertices) * 256/4#max connlut size
         sdram += len(self._filter_params) * 8
+        sdram += constants.SYSTEM_BYTES_REQUIREMENT + 8
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
-        if self._is_recording:
-            sdram += self._recording_size
+        sdram += self._recording_size
 
         resources = ResourceContainer(
             dtcm=DTCMResource(0),
-            sdram=SDRAMResource(sdram),
+            sdram=ConstantSDRAM(sdram),
             cpu_cycles=CPUCyclesPerTickResource(0),
             iptags=[], reverse_iptags=[])
         return resources
@@ -229,16 +237,19 @@ class DRNLVertex(
         return profiles
 
     @inject_items({
+        "machine_time_step": "MachineTimeStep",
+        "time_scale_factor": "TimeScaleFactor",
         "routing_info": "MemoryRoutingInfos",
         "tags": "MemoryTags",
-        "placements": "MemoryPlacements"
+        "placements": "MemoryPlacements",
     })
 
     @overrides(
         AbstractGeneratesDataSpecification.generate_data_specification,
-        additional_arguments=["routing_info", "tags", "placements"])
+        additional_arguments=["machine_time_step", "time_scale_factor","routing_info", "tags", "placements"])
     def generate_data_specification(
-            self, spec, placement, routing_info, tags, placements):
+            self, spec, placement,machine_time_step,
+            time_scale_factor, routing_info, tags, placements):
 
         OME_placement=placements.get_placement_of_vertex(self._ome).p
         self._placement = placements.get_placement_of_vertex(self)
@@ -246,11 +257,20 @@ class DRNLVertex(
         n_moc_mvs = len(self._moc_vertices)
         key_and_mask_table = numpy.zeros(n_moc_mvs, dtype=self._KEY_MASK_ENTRY_DTYPE)
         conn_lut = []
+        conn_matrix_dict = {}
         for i,(moc,conn_matrix) in enumerate(self._moc_vertices):
             key_and_mask = routing_info.get_routing_info_from_pre_vertex(moc,'SPIKE').first_key_and_mask
             key_and_mask_table[i]['key']=key_and_mask.key
             key_and_mask_table[i]['mask']=key_and_mask.mask
-            key_and_mask_table[i]['conn_index']=len(conn_lut)
+            # key_and_mask_table[i]['conn_index']=int(len(conn_lut)/32)
+            # for id in conn_matrix:
+            #     conn_lut.append(id.item())
+            conn_matrix_dict[str(key_and_mask.key)] = conn_matrix
+
+        key_and_mask_table.sort(axis=0, order='key')
+        for i,entry in enumerate(key_and_mask_table):
+            conn_matrix = conn_matrix_dict[str(entry['key'])]
+            key_and_mask_table[i]['conn_index'] = int(len(conn_lut) / 32)
             for id in conn_matrix:
                 conn_lut.append(id.item())
 
@@ -281,10 +301,9 @@ class DRNLVertex(
         spec.reserve_memory_region(self.REGIONS.PARAMETERS.value, region_size)
 
         #reserve recording region
-        if self._is_recording:
-            spec.reserve_memory_region(
-                self.REGIONS.RECORDING.value,
-                recording_utilities.get_recording_header_size(1))
+        spec.reserve_memory_region(
+            self.REGIONS.RECORDING.value,
+            recording_utilities.get_recording_header_size(1))
         if self._profile:
             #reserve profile region
             profile_utils.reserve_profile_region(
@@ -294,8 +313,8 @@ class DRNLVertex(
         # simulation.c requirements
         spec.switch_write_focus(self.REGIONS.SYSTEM.value)
         spec.write_array(simulation_utilities.get_simulation_header_array(
-            self.get_binary_file_name(), 1,
-            1))
+            self.get_binary_file_name(), machine_time_step,
+            time_scale_factor))
 
         spec.switch_write_focus(self.REGIONS.PARAMETERS.value)
 
@@ -328,8 +347,9 @@ class DRNLVertex(
             0, data_type=self._COREID_TYPE)
 
         # Write the Acknowledge key
-        spec.write_value(self._mack.get_acknowledge_key(
-            placement, routing_info))
+        # spec.write_value(self._mack.get_acknowledge_key(
+        #     placement, routing_info))
+        spec.write_value(0)
 
         # Write the key
         if len(keys)>0:
@@ -382,12 +402,11 @@ class DRNLVertex(
                 spec, 1,
                 self._n_profile_samples)
 
-        if self._is_recording:
-            # Write the recording regions
-            spec.switch_write_focus(self.REGIONS.RECORDING.value)
-            ip_tags = tags.get_ip_tags_for_vertex(self) or []
-            spec.write_array(recording_utilities.get_recording_header_array(
-                [self._recording_size], ip_tags=ip_tags))
+        # Write the recording regions
+        spec.switch_write_focus(self.REGIONS.RECORDING.value)
+        ip_tags = tags.get_ip_tags_for_vertex(self) or []
+        spec.write_array(recording_utilities.get_recording_header_array(
+            [self._recording_size], ip_tags=ip_tags))
 
         # End the specification
         spec.end_specification()
@@ -412,26 +431,25 @@ class DRNLVertex(
         """ Read back the spikes """
 
         # Read the data recorded
-        data_values, _ = buffer_manager.get_data_for_vertex(placement, 0)
-        data = data_values.read_all()
+        # data_values, _ = buffer_manager.get_data_for_vertex(placement, 0)
+        # data = data_values.read_all()
+        data, _ = buffer_manager.get_data_by_placement(placement, 0)
         numpy_format = list()
         formatted_data = numpy.array(data, dtype=numpy.uint8,copy=True).view(numpy.float64)
         output_data = formatted_data.copy()
         output_length = len(output_data)
 
-
         #check all expected data has been recorded
-        if output_length != self._num_data_points:
+        if output_length != self._n_moc_data_points:
             #if not set output to zeros of correct length, this will cause an error flag in run_ear.py
             #raise Warning
             print("recording not complete, reduce Fs or disable RT!\n"
                             "recorded output length:{}, expected length:{} "
                             "at placement:{},{},{}".format(len(output_data),
-                            self._num_data_points,placement.x,placement.y,placement.p))
+                            self._n_moc_data_points,placement.x,placement.y,placement.p))
 
-            # output_data = numpy.zeros(self._num_data_points)
-            output_data.resize(self._num_data_points,refcheck=False)
-        #return formatted_data
+            # output_data = numpy.zeros(self._n_moc_data_points)
+            output_data.resize(self._n_moc_data_points,refcheck=False)
         return output_data
 
     def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
@@ -439,7 +457,11 @@ class DRNLVertex(
             buffer_space, 4)
 
     def get_recorded_region_ids(self):
-        return [0]
+        if self._is_recording:
+            regions = [0]
+        else:
+            regions = []
+        return regions
 
     def get_recording_region_base_address(self, txrx, placement):
         return helpful_functions.locate_memory_region_for_placement(
