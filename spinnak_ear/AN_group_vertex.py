@@ -20,6 +20,8 @@ from enum import Enum
 from spinn_front_end_common.utilities import helpful_functions, constants
 from spinn_front_end_common.interface.simulation import simulation_utilities
 
+from data_specification.constants import APP_PTR_TABLE_BYTE_SIZE
+
 import numpy
 
 from spinn_front_end_common.abstract_models\
@@ -64,8 +66,10 @@ class ANGroupVertex(
     @property
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
-        sdram = self._N_PARAMETER_BYTES + len(self._child_vertices) * self._KEY_MASK_ENTRY_SIZE_BYTES
+        # sdram = self._N_PARAMETER_BYTES + len(self._child_vertices) * self._KEY_MASK_ENTRY_SIZE_BYTES
+        sdram = self._N_PARAMETER_BYTES + 2 * self._KEY_MASK_ENTRY_SIZE_BYTES
         sdram += constants.SYSTEM_BYTES_REQUIREMENT + 8
+        sdram += APP_PTR_TABLE_BYTE_SIZE
 
         resources = ResourceContainer(
             dtcm=DTCMResource(0),
@@ -135,11 +139,11 @@ class ANGroupVertex(
                 rinfo = routing_info.get_routing_info_from_partition(
                     partition)
                 key = rinfo.first_key
-                mask = rinfo.first_mask
                 spec.write_value(
                    key, data_type=self._KEY_ELEMENT_TYPE)
                 #write true is_key
                 spec.write_value(1)
+                break
         #write is final
         spec.write_value(self._is_final_row,data_type=self._KEY_ELEMENT_TYPE)
         #write n_atoms

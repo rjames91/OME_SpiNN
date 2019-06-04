@@ -36,6 +36,9 @@ from spinn_front_end_common.interface.profiling.profile_data \
 from enum import Enum
 import numpy
 
+from data_specification.constants import APP_PTR_TABLE_BYTE_SIZE
+
+
 class IHCANVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
@@ -129,6 +132,7 @@ class IHCANVertex(
         sdram += 1 * self._KEY_ELEMENT_TYPE.size
         sdram += constants.SYSTEM_BYTES_REQUIREMENT + 8
         sdram += self._recording_size
+        sdram += APP_PTR_TABLE_BYTE_SIZE
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 

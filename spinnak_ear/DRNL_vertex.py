@@ -34,7 +34,7 @@ from spinn_front_end_common.interface.profiling.abstract_has_profile_data \
 from spinn_front_end_common.interface.profiling import profile_utils
 from spinn_front_end_common.utilities import helpful_functions, constants
 from spinn_front_end_common.interface.simulation import simulation_utilities
-
+from data_specification.constants import APP_PTR_TABLE_BYTE_SIZE
 
 
 class DRNLVertex(
@@ -201,7 +201,10 @@ class DRNLVertex(
         sdram += len(self._moc_vertices) * self._KEY_MASK_ENTRY_SIZE_BYTES
         sdram += len(self._moc_vertices) * 256/4#max connlut size
         sdram += len(self._filter_params) * 8
-        sdram += constants.SYSTEM_BYTES_REQUIREMENT + 8
+        sdram += 4 * 8 * 4 #circular buffer to IHCs
+        sdram += APP_PTR_TABLE_BYTE_SIZE
+
+
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
         sdram += self._recording_size

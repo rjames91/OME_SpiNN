@@ -44,6 +44,7 @@ from spinn_front_end_common.interface.profiling.abstract_has_profile_data \
     import AbstractHasProfileData
 from spinn_front_end_common.interface.profiling import profile_utils
 from spinn_front_end_common.interface.simulation import simulation_utilities
+from data_specification.constants import APP_PTR_TABLE_BYTE_SIZE
 
 class OMEVertex(
         MachineVertex,
@@ -171,6 +172,9 @@ class OMEVertex(
     def resources_required(self):
         sdram = self._N_PARAMETER_BYTES + self._data_size
         sdram += len(self._drnl_vertices) * self._KEY_ELEMENT_TYPE.size
+        sdram += constants.SYSTEM_BYTES_REQUIREMENT + 8
+        sdram += APP_PTR_TABLE_BYTE_SIZE
+
         if self._profile:
             sdram += profile_utils.get_profile_region_size(self._n_profile_samples)
 
