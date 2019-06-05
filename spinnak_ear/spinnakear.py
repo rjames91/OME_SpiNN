@@ -62,6 +62,7 @@ def naive_n_chips_calc(n_channels,n_ears,neuron_pops=None,n_macks=4,n_an_group=2
 
     return n_chips_total*2
 
-
+def spinnakear_size_calculator(scale=1.):
+    return int(30000. * scale)
 
 
