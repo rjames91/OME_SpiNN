@@ -32,6 +32,7 @@ import numpy as np
 class ANGroupVertex(
         MachineVertex, AbstractHasAssociatedBinary,
         AbstractGeneratesDataSpecification,
+        AbstractProvidesNKeysForPartition
         ):
     """ A vertex that runs the multi-cast acknowledge algorithm
     """
@@ -165,3 +166,7 @@ class ANGroupVertex(
         # End the specification
         spec.end_specification()
 
+
+    @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
+    def get_n_keys_for_partition(self, partition, graph_mapper):
+        return self._n_atoms  # two for control IDs
