@@ -105,7 +105,6 @@ class IHCANVertex(
         self._n_msr = n_msr
         self._n_hsr = n_hsr
 
-
         self._num_data_points = n_fibres * drnl.n_data_points # num of points is double previous calculations due to 2 fibre output of IHCAN model
         if bitfield:
             self._recording_size = numpy.ceil((self._num_data_points/8.) * self._KEY_ELEMENT_TYPE.size) # multiply number of bytes by 4 so we ensure recording works on spinnaker
@@ -306,9 +305,12 @@ class IHCANVertex(
             numpy_format = list()
             numpy_format.append(("AN", numpy.float32))
             formatted_data = numpy.array(data, dtype=numpy.uint8,copy=True).view(numpy_format)
-            output_data = formatted_data.copy()
-            output_length = len(output_data)
-
+            n_seg=numpy.ceil(formatted_data.size/8.)
+            split=numpy.split(formatted_data,n_seg)
+            lsr=numpy.concatenate(split[0::2])
+            hsr=numpy.concatenate(split[1::2])
+            output_data = numpy.asarray([lsr,hsr])
+            output_length = hsr.size + lsr.size
 
         #check all expected data has been recorded
         if output_length != self._num_data_points:

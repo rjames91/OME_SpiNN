@@ -81,18 +81,19 @@ class SpiNNakEarVertex(ApplicationVertex,
     _MAX_N_ATOMS_PER_CORE = 2#256
     _FINAL_ROW_N_ATOMS = 256
     _N_FIBRES_PER_IHCAN = 2
-    _N_LSR_PER_IHC = 2#3
-    _N_MSR_PER_IHC = 2#3
+    _N_LSR_PER_IHC = 4#2#3
+    _N_MSR_PER_IHC = 0#2#3
     _N_HSR_PER_IHC = 6#4
     _N_FIBRES_PER_IHC = _N_LSR_PER_IHC + _N_MSR_PER_IHC + _N_HSR_PER_IHC
 
     def __init__(
-            self, n_neurons, audio_input,fs,n_channels,pole_freqs,param_file,ear_index,
+            self, n_neurons, audio_input,fs,n_channels,pole_freqs,param_file,ear_index,duration,
             constraints, label,max_atoms_per_core, model):
         self._model_name = "SpikeSourceSpiNNakEar"
         self._model = model
         self.param_file = param_file
         self.audio_input = audio_input
+        self._duration = duration
         self._data_size_bytes = (
             (self.audio_input.size * self._DATA_ELEMENT_TYPE.size) +
             self._DATA_COUNT_TYPE.size
@@ -111,6 +112,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._n_group_tree_rows = self._max_n_atoms_per_group_tree_row.size
         self._is_recording_spikes = True#hack to force recording False
         self._is_recording_moc = True#hack to force recording False
+        self._is_recording_debug = False
 
         self._mv_list = []#append to each time create_machine_vertex is called
         if pole_freqs is None:
@@ -184,6 +186,9 @@ class SpiNNakEarVertex(ApplicationVertex,
             elif variable == "all":
                 self._is_recording_spikes = True
                 self._is_recording_moc = True
+            elif variable == "debug_values":
+                self._is_recording_debug = True
+                self._is_recording_spikes = False
             else:
                 raise Exception("recording of " + variable + " not supported by SpiNNak-Ear!")
 
@@ -258,13 +263,16 @@ class SpiNNakEarVertex(ApplicationVertex,
             sdram_resource_bytes += 8 * 8
             sdram_resource_bytes += 256 #max n bytes for conn_lut
             if self._is_recording_moc:
-                sdram_resource_bytes += self._data_size_bytes
+                sdram_resource_bytes += int((self._duration*1e-3)/(machine_time_step*1e-6))\
+                                        *DataType.FLOAT_64.size + self._DATA_COUNT_TYPE.size
             reverse_iptags = None
 
         # elif vertex_label == "ihc":
         elif "ihc" in vertex_label:
             if self._is_recording_spikes:
                 sdram_resource_bytes = 15*4 + 1 * self._KEY_ELEMENT_TYPE.size + self._N_FIBRES_PER_IHCAN * np.ceil(self.audio_input.size/8.) * 4
+            elif self._is_recording_debug:
+                sdram_resource_bytes = 15*4 + 1 * self._KEY_ELEMENT_TYPE.size + self._N_FIBRES_PER_IHCAN * self.audio_input.size * 4
             else:
                 sdram_resource_bytes = 15*4 + 1 * self._KEY_ELEMENT_TYPE.size
             reverse_iptags = None
@@ -316,16 +324,18 @@ class SpiNNakEarVertex(ApplicationVertex,
 
 
     @inject_items({
-        "machine_time_step": "MachineTimeStep"
+        "machine_time_step": "MachineTimeStep",
+        # "data_n_timesteps": "DataNTimeSteps"
     })
     @overrides(
         ApplicationVertex.create_machine_vertex,
-        additional_arguments={"machine_time_step"}
+        additional_arguments={"machine_time_step"}#,"data_n_timesteps"}
     )
     def create_machine_vertex(
             self, vertex_slice,
             resources_required,
             machine_time_step,  # @UnusedVariable
+            # data_n_timesteps,
             label=None, constraints=None):
         #lookup relevant mv type, parent mv and edges associated with this atom
         mv_type = self._mv_index_list[vertex_slice.lo_atom]
@@ -351,8 +361,8 @@ class SpiNNakEarVertex(ApplicationVertex,
                 #first parent will be ome
                 if parent_index in self._ome_indices:
                     ome = self._mv_list[parent]
-                    vertex = DRNLVertex(ome,self.pole_freqs[self._pole_index],0.,is_recording=self._is_recording_moc,
-                                        profile=False,drnl_index=self._pole_index)
+                    vertex = DRNLVertex(ome,self.pole_freqs[self._pole_index],0.,machine_time_step,self._duration,
+                                        is_recording=self._is_recording_moc,profile=False,drnl_index=self._pole_index)
                     self._pole_index +=1
                 else:#will be a mack vertex
                     self._mv_list[parent].register_mack_processor(vertex)
@@ -367,6 +377,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 vertex = IHCANVertex(self._mv_list[parent], 1,
                                     self._ihc_seeds[self._seed_index:self._seed_index + 4],self._is_recording_spikes,
                                      ear_index=self._ear_index,bitfield=True, profile=False,n_lsr=n_lsr,n_msr=n_msr,n_hsr=n_hsr)
+                                     # ear_index=self._ear_index,bitfield=False, profile=False,n_lsr=n_lsr,n_msr=n_msr,n_hsr=n_hsr)
                 self._seed_index += 4
                 # ensure placement is on the same chip as the parent DRNL
                 vertex.add_constraint(SameChipAsConstraint(self._mv_list[parent]))
@@ -441,6 +452,8 @@ class SpiNNakEarVertex(ApplicationVertex,
                 fibres.append(0)
 
             random.shuffle(fibres)
+            #HACK for debug
+            # fibres = [0,2,0,2,0,2,0,2,0,2]
 
             for j in range(n_ihcs):
                 ihc_index = len(mv_index_list)

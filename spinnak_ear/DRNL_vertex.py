@@ -77,7 +77,7 @@ class DRNLVertex(
                ('RECORDING', 2),
                ('PROFILE', 3)])
 
-    def __init__(self, ome,CF,delay,is_recording=False,profile=True,drnl_index=None,data_partition_name="DRNLData",
+    def __init__(self, ome,CF,delay,machine_time_step,duration,is_recording=False,profile=True,drnl_index=None,data_partition_name="DRNLData",
             acknowledge_partition_name="DRNLDataAck"):
         """
 
@@ -94,6 +94,7 @@ class DRNLVertex(
         self._drnl_index = drnl_index
         self._is_recording = is_recording
         self._placement = None
+        self._duration = duration
 
         self._ihcan_vertices = list()
         self._ihcan_placements = list()
@@ -101,7 +102,8 @@ class DRNLVertex(
         self._moc_vertices = list()
 
         self._num_data_points = ome.n_data_points
-        self._n_moc_data_points = int((self._num_data_points/(self._fs/1000.))/10)*10
+        # self._n_moc_data_points = int((self._num_data_points/(self._fs/1000.))/10)*10
+        self._n_moc_data_points = int(((self._duration*1e-3)/(machine_time_step*1e-6))/10)*10
         self._recording_size = (
              self._n_moc_data_points * DataType.FLOAT_64.size +
             self._DATA_COUNT_TYPE.size
@@ -265,9 +267,6 @@ class DRNLVertex(
             key_and_mask = routing_info.get_routing_info_from_pre_vertex(moc,'SPIKE').first_key_and_mask
             key_and_mask_table[i]['key']=key_and_mask.key
             key_and_mask_table[i]['mask']=key_and_mask.mask
-            # key_and_mask_table[i]['conn_index']=int(len(conn_lut)/32)
-            # for id in conn_matrix:
-            #     conn_lut.append(id.item())
             conn_matrix_dict[str(key_and_mask.key)] = conn_matrix
 
         key_and_mask_table.sort(axis=0, order='key')
@@ -346,8 +345,11 @@ class DRNLVertex(
             placement.p, data_type=self._COREID_TYPE)
 
         #Write the OMEAppID
+        # spec.write_value(
+        #     0, data_type=self._COREID_TYPE)
+        #Write the Machine timestep (us)
         spec.write_value(
-            0, data_type=self._COREID_TYPE)
+            machine_time_step, data_type=self._COREID_TYPE)
 
         # Write the Acknowledge key
         # spec.write_value(self._mack.get_acknowledge_key(
@@ -420,12 +422,17 @@ class DRNLVertex(
         samples = list()
         if variable == 'spikes':
             for placement in self._ihcan_placements:
-
                 # Read the data recorded
                 for fibre in placement.vertex.read_samples(buffer_manager, placement):
                     samples.append(fibre)
         elif variable == 'moc':
             samples.append(self.read_moc_attenuation(buffer_manager,self._placement))
+        elif variable == 'debug':
+            #only read data from first IHC
+            for fibre in self._ihcan_placements[0].vertex.read_samples(buffer_manager, self._ihcan_placements[0]):
+                samples.append(fibre)
+
+
 
         # Merge all the arrays
         return numpy.asarray(samples)
