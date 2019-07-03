@@ -25,7 +25,7 @@ class SpiNNakEar(AbstractPyNNModel):
         self._param_file=param_file
         self._ear_index=ear_index
         if duration is None:
-            self._duration = (self._audio_input.size / self.Fs)*1000#ms
+            self._duration = (self._audio_input.size / self._fs)*1000#ms
         else:
             self._duration = duration
 
