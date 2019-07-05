@@ -80,7 +80,7 @@ class SpiNNakEarVertex(ApplicationVertex,
     _N_POPULATION_RECORDING_REGIONS = 1
     _MAX_N_ATOMS_PER_CORE = 2#256
     _FINAL_ROW_N_ATOMS = 256
-    _N_FIBRES_PER_IHCAN = 2
+    _N_FIBRES_PER_IHCAN = 2#10
     _N_LSR_PER_IHC = 4#2#3
     _N_MSR_PER_IHC = 0#2#3
     _N_HSR_PER_IHC = 6#4
@@ -100,8 +100,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         )
         self.fs = fs
         self.n_channels = int(n_channels)
-        self._n_ihc = 5 #number of ihcs per parent drnl
-
+        self._n_ihc = self._N_FIBRES_PER_IHC/self._N_FIBRES_PER_IHCAN #number of ihcs per parent drnl
         self._sdram_resource_bytes = audio_input.dtype.itemsize * audio_input.size
         self._todo_edges = []
         self._todo_mack_reg = []
@@ -345,7 +344,7 @@ class SpiNNakEarVertex(ApplicationVertex,
 
         if mv_type == 'ome':
             vertex = OMEVertex(self.audio_input, self.fs,self.n_channels,
-                               time_scale=self._time_scale_factor, profile=False)
+                               time_scale=self._time_scale_factor, profile=True)
             vertex.add_constraint(EarConstraint())
 
         elif mv_type == 'mack':
@@ -362,7 +361,8 @@ class SpiNNakEarVertex(ApplicationVertex,
                 if parent_index in self._ome_indices:
                     ome = self._mv_list[parent]
                     vertex = DRNLVertex(ome,self.pole_freqs[self._pole_index],0.,machine_time_step,self._duration,
-                                        is_recording=self._is_recording_moc,profile=False,drnl_index=self._pole_index)
+                                        # is_recording=self._is_recording_moc,profile=False,drnl_index=self._pole_index)
+                                        is_recording=self._is_recording_moc,profile=True,drnl_index=self._pole_index)
                     self._pole_index +=1
                 else:#will be a mack vertex
                     self._mv_list[parent].register_mack_processor(vertex)
@@ -376,7 +376,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 n_hsr = int(mv_type[-1])
                 vertex = IHCANVertex(self._mv_list[parent], 1,
                                     self._ihc_seeds[self._seed_index:self._seed_index + 4],self._is_recording_spikes,
-                                     ear_index=self._ear_index,bitfield=True, profile=False,n_lsr=n_lsr,n_msr=n_msr,n_hsr=n_hsr)
+                                     ear_index=self._ear_index,bitfield=True, profile=True,n_fibres=self._N_FIBRES_PER_IHCAN,n_lsr=n_lsr,n_msr=n_msr,n_hsr=n_hsr)
                                      # ear_index=self._ear_index,bitfield=False, profile=False,n_lsr=n_lsr,n_msr=n_msr,n_hsr=n_hsr)
                 self._seed_index += 4
                 # ensure placement is on the same chip as the parent DRNL
@@ -498,3 +498,10 @@ class SpiNNakEarVertex(ApplicationVertex,
             n_angs = n_row_angs
 
         return len(mv_index_list), mv_index_list, parent_index_list, edge_index_list, ihc_seeds, ome_indices
+
+    def get_profile_data(self,vertices):
+        profile_dict = {}
+        for vertex_name in vertices:
+            profiles = [self._mv_list[i]._process_profile_times for i,name in enumerate(self._mv_index_list) if vertex_name in name]
+            profile_dict[vertex_name]=profiles
+        return  profile_dict

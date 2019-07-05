@@ -44,6 +44,11 @@ class SpiNNakEar(AbstractPyNNModel):
     # def save_pre_gen_vars(self,filepath):
     #     self._vertex.save_pre_gen_vars(filepath=filepath)
 
+    def get_profile_data(self,vertices=['all']):
+        if vertices=='all':
+            vertices = ['ome','drnl','ihc']
+        return self._vertex.get_profile_data(vertices=vertices)
+
 #naive in that it assumes the mack or an group cores won't fit onto exisitng chips (an overestimate of n_chips)
 def naive_n_chips_calc(n_channels,n_ears,neuron_pops=None,n_macks=4,n_an_group=2,n_cores_per_chip=15.):
 

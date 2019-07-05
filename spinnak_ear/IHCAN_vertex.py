@@ -98,9 +98,9 @@ class IHCANVertex(
         self._fs=drnl.fs
         self._n_atoms = n_fibres
 
-        if n_lsr+n_msr+n_hsr > 2:
-            raise Exception("Only 2 fibres can be modelled per IHCAN,"
-                            " currently requesting {}lsr, {}msr, {}hsr".format(n_lsr,n_msr,n_hsr))
+        if n_lsr+n_msr+n_hsr > n_fibres:
+            raise Exception("Only {} fibres can be modelled per IHCAN,"
+                            " currently requesting {}lsr, {}msr, {}hsr".format(n_fibres,n_lsr,n_msr,n_hsr))
         self._n_lsr = n_lsr
         self._n_msr = n_msr
         self._n_hsr = n_hsr
@@ -119,7 +119,7 @@ class IHCANVertex(
             self._N_PARAMETER_BYTES
         )
         # Set up for profiling
-        self._n_profile_samples = 10000
+        self._n_profile_samples = (drnl.n_data_points/8) * 2 #8 for segment size and 2 for start and end times
         self._bitfield = bitfield
         self._profile = profile
         self._process_profile_times = None
@@ -152,7 +152,7 @@ class IHCANVertex(
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
-        return 2#4#for control IDs#TODO: change to n_fibres
+        return self._n_atoms#4#for control IDs
 
     @overrides(AbstractHasProfileData.get_profile_data)
     def get_profile_data(self, transceiver, placement):
@@ -160,7 +160,7 @@ class IHCANVertex(
             profiles = profile_utils.get_profiling_data(
                 self.REGIONS.PROFILE.value,
                 self.PROFILE_TAG_LABELS, transceiver, placement)
-            self._process_profile_times = profiles._tags['TIMER'][1]
+            self._process_profile_times = profiles._tags['DMA_READ'][1]
         else:
             profiles=ProfileData(self.PROFILE_TAG_LABELS)
         return profiles
@@ -293,20 +293,35 @@ class IHCANVertex(
             formatted_data = numpy.array(data, dtype=numpy.uint8)
             #only interested in every 4th byte!
             formatted_data = formatted_data[::4]
-            lsr = formatted_data[0::2]#TODO:change names as output may not correspond to lsr + hsr fibres
-            hsr = formatted_data[1::2]
-            unpacked_lsr = numpy.unpackbits(lsr)
-            unpacked_hsr = numpy.unpackbits(hsr)
-            # output_data = [unpacked_lsr.astype(numpy.float32),unpacked_hsr.astype(numpy.float32)]
-            output_data = numpy.asarray([numpy.nonzero(unpacked_lsr)[0]*(1000./self._fs),numpy.nonzero(unpacked_hsr)[0]*(1000./self._fs)])
-            output_length = unpacked_hsr.size + unpacked_lsr.size
-
+            fibre_times = []
+            output_length=0
+            for fibre_index in range(self._n_atoms):
+                fibre_data = formatted_data[fibre_index::self._n_atoms]
+                unpacked_data = numpy.unpackbits(fibre_data)
+                output_length+=unpacked_data.size
+                fibre_times.append(numpy.nonzero(unpacked_data)[0]*(1000./self._fs))
+            output_data = numpy.asarray(fibre_times)
+            # lsr = formatted_data[0::2]#TODO:change names as output may not correspond to lsr + hsr fibres
+            # hsr = formatted_data[1::2]
+            # unpacked_lsr = numpy.unpackbits(lsr)
+            # unpacked_hsr = numpy.unpackbits(hsr)
+            # # output_data = [unpacked_lsr.astype(numpy.float32),unpacked_hsr.astype(numpy.float32)]
+            # output_data = numpy.asarray([numpy.nonzero(unpacked_lsr)[0]*(1000./self._fs),numpy.nonzero(unpacked_hsr)[0]*(1000./self._fs)])
+            # output_length = unpacked_hsr.size + unpacked_lsr.size
         else:
             numpy_format = list()
             numpy_format.append(("AN", numpy.float32))
             formatted_data = numpy.array(data, dtype=numpy.uint8,copy=True).view(numpy_format)
             n_seg=numpy.ceil(formatted_data.size/8.)
             split=numpy.split(formatted_data,n_seg)
+            fibre_times = []
+            output_length=0
+            for fibre_index in range(self._n_atoms):
+                fibre_data = formatted_data[fibre_index::self._n_atoms]
+                unpacked_data = numpy.unpackbits(fibre_data)
+                output_length+=unpacked_data.size
+                fibre_times.append(numpy.nonzero(unpacked_data)[0]*(1000./self._fs))
+            output_data = numpy.asarray(fibre_times)
             lsr=numpy.concatenate(split[0::2])
             hsr=numpy.concatenate(split[1::2])
             output_data = numpy.asarray([lsr,hsr])
@@ -316,13 +331,14 @@ class IHCANVertex(
         if output_length != self._num_data_points:
             #if output not set to correct length it will cause an error flag in run_ear.py
             #raise Warning
-            print("recording not complete, reduce Fs or disable RT!\n"
+            # print("recording not complete, reduce Fs or disable RT!\n"
+            print("recording not complete, likely a faulty core - set output to zeros!\n"
                             "recorded output length:{}, expected length:{} "
                             "at placement:{},{},{}".format(output_length,
                             self._num_data_points,placement.x,placement.y,placement.p))
 
-            # output_data = numpy.zeros(self._num_data_points)
-            output_data.resize(self._num_data_points,refcheck=False)
+            output_data = numpy.zeros(self._num_data_points)
+            # output_data.resize(self._num_data_points,refcheck=False)
         #return formatted_data
         return output_data
 

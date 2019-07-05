@@ -22,7 +22,7 @@
 #include <profile_tags.h>
 #include <debug.h>
 
-//#define PROFILE
+#define PROFILE
 
 //=========GLOBAL VARIABLES============//
 REAL m_pi;
@@ -327,7 +327,7 @@ bool app_init(void)
     #ifdef PROFILE
         // Setup profiler
         profiler_init(
-            data_specification_get_region(1, data_address));
+            data_specification_get_region(PROFILER, data_address));
     #endif
         log_info("init complete");
 	}
@@ -370,6 +370,8 @@ void app_end(uint null_a,uint null_b)
 //DMA read
 void data_read(uint null_a, uint null_b)
 {
+    if (read_ticks==0)io_printf(IO_BUF,"sync rx!\n");
+
 	REAL *dtcm_buffer_in;
 /*	if(test_DMA == TRUE && sync_count<num_macks && seg_index==0)
 	{
@@ -386,7 +388,7 @@ void data_read(uint null_a, uint null_b)
 	if(read_ticks<TOTAL_TICKS && test_DMA == TRUE)
 	{
 	    #ifdef PROFILE
-	    if(seg_index==0)profiler_write_entry_disable_irq_fiq(PROFILER_ENTER | PROFILER_DMA_READ);
+        profiler_write_entry_disable_irq_fiq(PROFILER_ENTER | PROFILER_DMA_READ);
         #endif
 	    read_ticks++;
 		//assign recieve buffer
@@ -428,9 +430,7 @@ void data_read(uint null_a, uint null_b)
 
 void process_chan(REAL *in_buffer)
 {
-    #ifdef PROFILE
-        profiler_write_entry_disable_irq_fiq(PROFILER_ENTER | PROFILER_TIMER);
-    #endif
+
 	uint i,j,k;
 	uint si=0;
 	REAL concha,earCanalInput,earCanalRes,earCanalOutput,ARoutput,stapesVelocity,stapesDisplacement;
@@ -503,7 +503,7 @@ void process_chan(REAL *in_buffer)
 	}
 
     #ifdef PROFILE
-    profiler_write_entry_disable_irq_fiq(PROFILER_EXIT | PROFILER_TIMER);
+    profiler_write_entry_disable_irq_fiq(PROFILER_EXIT | PROFILER_DMA_READ);
     #endif
 }
 
@@ -539,7 +539,6 @@ void sync_check(uint mc_key, uint null)
 void app_done ()
 {
 #ifdef PROFILE
-  profiler_write_entry_disable_irq_fiq(PROFILER_EXIT | PROFILER_DMA_READ);
   profiler_finalise();
 #endif
 	log_info("b0:%k",(accum)stapesHP_b[0]);
@@ -576,7 +575,6 @@ void c_main()
 //        spin1_callback_on (MC_PACKET_RECEIVED,sync_check,-1);
 //        spin1_start (SYNC_WAIT);
         simulation_run();
-//        app_done ();
     }
 }
 
