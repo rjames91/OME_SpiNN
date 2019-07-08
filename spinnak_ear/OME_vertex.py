@@ -125,7 +125,7 @@ class OMEVertex(
 
         # Set up for profiling
         self._profile = profile
-        self._n_profile_samples = 10000
+        self._n_profile_samples = (len(self._data)/8) * 2
         self._process_profile_times = None
 
     @property
@@ -202,9 +202,9 @@ class OMEVertex(
     def get_profile_data(self, transceiver, placement):
         if self._profile:
             profiles =  profile_utils.get_profiling_data(
-                1,
+                self.REGIONS.PROFILE.value,
                 self.PROFILE_TAG_LABELS, transceiver, placement)
-            self._process_profile_times = profiles._tags['TIMER'][1]
+            self._process_profile_times = profiles._tags['DMA_READ'][1]
         else:
             profiles=ProfileData(self.PROFILE_TAG_LABELS)
         return profiles
@@ -235,7 +235,7 @@ class OMEVertex(
         if self._profile:
             #reserve profile region
             profile_utils.reserve_profile_region(
-                spec, 1,
+                spec, self.REGIONS.PROFILE.value,
                 self._n_profile_samples)
 
         # simulation.c requirements
