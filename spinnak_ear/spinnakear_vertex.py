@@ -102,16 +102,18 @@ class SpiNNakEarVertex(ApplicationVertex,
         )
         config = globals_variables.get_simulator().config
         self._time_scale_factor = helpful_functions.read_config_int(config,"Machine","time_scale_factor")
-        if self.fs / self._time_scale_factor > 22050:
-            raise Exception("The input sampling frequency is too high for the chosen simulation time scale."
-                            "Please reduce Fs or increase the time scale factor in the config file")
         #cycle through potential n_fibres per IHC and find the largest N that satisfys execution time
         sample_time = self._time_scale_factor / self.fs
+        solved = False
         for n in self._N_FIBRES_LIST:
             max_sample_processing_time = (10.99*n + 18.12)*1e-6
             if max_sample_processing_time<sample_time:
                 self._N_FIBRES_PER_IHCAN=n
+                solved = True
                 break
+        if solved is False:
+            raise Exception("The input sampling frequency is too high for the chosen simulation time scale."
+                "Please reduce Fs or increase the time scale factor in the config file")
         self.n_channels = int(n_channels)
         self._n_ihc = self._N_FIBRES_PER_IHC/self._N_FIBRES_PER_IHCAN #number of ihcs per parent drnl
         self._sdram_resource_bytes = audio_input.dtype.itemsize * audio_input.size
@@ -128,9 +130,12 @@ class SpiNNakEarVertex(ApplicationVertex,
 
         self._mv_list = []#append to each time create_machine_vertex is called
         if pole_freqs is None:
-            max_power = min([np.log10(self.fs/2.),4.25])
-            self.pole_freqs = np.flipud(np.logspace(np.log10(30),max_power,self.n_channels))#TODO implement greenwood function
-            # self.pole_freqs = np.asarray(np.logspace(np.log10(30),max_power,self.n_channels))
+            if self.fs>40e3: #use the greenwood mapping
+                self.pole_freqs = np.flipud(165.4*(10**(2.1*np.linspace(0,1,self.n_channels))-0.88))
+
+            else:# don't want alias frequencies so we use a capped log scale map
+                max_power = min([np.log10(self.fs/2.),4.25])
+                self.pole_freqs = np.flipud(np.logspace(np.log10(30),max_power,self.n_channels))#TODO implement greenwood function
         else:
             self.pole_freqs = pole_freqs
         self._seed_index = 0
