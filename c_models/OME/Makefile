@@ -15,7 +15,7 @@ SOURCE_DIRS := $(SOURCE_DIR)
 APP_OUTPUT_DIR := $(abspath $(CURRENT_DIR)../../model_binaries/)/
 CFLAGS +=-lm -Iinclude/ -ffast-math
 
-PROFILER = PROFILER_ENABLED
+#PROFILER = PROFILER_ENABLED
 
 include $(SPINN_DIRS)/make/local.mk
 #include $(SPINN_DIRS)/make/app.make

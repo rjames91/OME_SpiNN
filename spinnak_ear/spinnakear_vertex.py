@@ -358,7 +358,7 @@ class SpiNNakEarVertex(ApplicationVertex,
 
         if mv_type == 'ome':
             vertex = OMEVertex(self.audio_input, self.fs,self.n_channels,
-                               time_scale=self._time_scale_factor, profile=True)
+                               time_scale=self._time_scale_factor, profile=False)
             vertex.add_constraint(EarConstraint())
 
         elif mv_type == 'mack':
@@ -375,8 +375,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 if parent_index in self._ome_indices:
                     ome = self._mv_list[parent]
                     vertex = DRNLVertex(ome,self.pole_freqs[self._pole_index],0.,machine_time_step,self._duration,
-                                        # is_recording=self._is_recording_moc,profile=False,drnl_index=self._pole_index)
-                                        is_recording=self._is_recording_moc,profile=True,drnl_index=self._pole_index)
+                                        is_recording=self._is_recording_moc,profile=False,drnl_index=self._pole_index)
                     self._pole_index +=1
                 else:#will be a mack vertex
                     self._mv_list[parent].register_mack_processor(vertex)
@@ -390,8 +389,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 n_hsr = int(mv_type[-1])
                 vertex = IHCANVertex(self._mv_list[parent], 1,
                                     self._ihc_seeds[self._seed_index:self._seed_index + 4],self._is_recording_spikes,
-                                     ear_index=self._ear_index,bitfield=True, profile=True,n_fibres=self._N_FIBRES_PER_IHCAN,n_lsr=n_lsr,n_msr=n_msr,n_hsr=n_hsr)
-                                     # ear_index=self._ear_index,bitfield=False, profile=False,n_lsr=n_lsr,n_msr=n_msr,n_hsr=n_hsr)
+                                     ear_index=self._ear_index,bitfield=True, profile=False,n_fibres=self._N_FIBRES_PER_IHCAN,n_lsr=n_lsr,n_msr=n_msr,n_hsr=n_hsr)
                 self._seed_index += 4
                 # ensure placement is on the same chip as the parent DRNL
                 vertex.add_constraint(SameChipAsConstraint(self._mv_list[parent]))
