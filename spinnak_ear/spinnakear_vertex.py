@@ -80,7 +80,8 @@ class SpiNNakEarVertex(ApplicationVertex,
     _N_POPULATION_RECORDING_REGIONS = 1
     _MAX_N_ATOMS_PER_CORE = 2#256
     _FINAL_ROW_N_ATOMS = 256
-    _N_FIBRES_PER_IHCAN = 2#10
+    # _N_FIBRES_PER_IHCAN = 2#10
+    _N_FIBRES_LIST = [10,5,2,1]
     _N_LSR_PER_IHC = 4#2#3
     _N_MSR_PER_IHC = 0#2#3
     _N_HSR_PER_IHC = 6#4
@@ -93,12 +94,24 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._model = model
         self.param_file = param_file
         self.audio_input = audio_input
+        self.fs = fs
         self._duration = duration
         self._data_size_bytes = (
             (self.audio_input.size * self._DATA_ELEMENT_TYPE.size) +
             self._DATA_COUNT_TYPE.size
         )
-        self.fs = fs
+        config = globals_variables.get_simulator().config
+        self._time_scale_factor = helpful_functions.read_config_int(config,"Machine","time_scale_factor")
+        if self.fs / self._time_scale_factor > 22050:
+            raise Exception("The input sampling frequency is too high for the chosen simulation time scale."
+                            "Please reduce Fs or increase the time scale factor in the config file")
+        #cycle through potential n_fibres per IHC and find the largest N that satisfys execution time
+        sample_time = self._time_scale_factor / self.fs
+        for n in self._N_FIBRES_LIST:
+            max_sample_processing_time = (10.99*n + 18.12)*1e-6
+            if max_sample_processing_time<sample_time:
+                self._N_FIBRES_PER_IHCAN=n
+                break
         self.n_channels = int(n_channels)
         self._n_ihc = self._N_FIBRES_PER_IHC/self._N_FIBRES_PER_IHCAN #number of ihcs per parent drnl
         self._sdram_resource_bytes = audio_input.dtype.itemsize * audio_input.size
@@ -116,18 +129,14 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._mv_list = []#append to each time create_machine_vertex is called
         if pole_freqs is None:
             max_power = min([np.log10(self.fs/2.),4.25])
-            self.pole_freqs = np.flipud(np.logspace(np.log10(30),max_power,self.n_channels))
+            self.pole_freqs = np.flipud(np.logspace(np.log10(30),max_power,self.n_channels))#TODO implement greenwood function
             # self.pole_freqs = np.asarray(np.logspace(np.log10(30),max_power,self.n_channels))
         else:
             self.pole_freqs = pole_freqs
         self._seed_index = 0
         self._pole_index = 0
 
-        config = globals_variables.get_simulator().config
-        self._time_scale_factor = helpful_functions.read_config_int(config,"Machine","time_scale_factor")
-        if self.fs / self._time_scale_factor > 22050:
-            raise Exception("The input sampling frequency is too high for the chosen simulation time scale."
-                            "Please reduce Fs or increase the time scale factor in the config file")
+
         try:
             pre_gen_vars = np.load(self.param_file)
             self._n_atoms=pre_gen_vars['n_atoms']
