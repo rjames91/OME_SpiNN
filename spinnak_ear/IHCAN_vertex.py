@@ -337,7 +337,7 @@ class IHCANVertex(
                             "at placement:{},{},{}".format(output_length,
                             self._num_data_points,placement.x,placement.y,placement.p))
 
-            output_data = numpy.zeros(self._num_data_points)
+            output_data = numpy.asarray([[] for _ in range(self._n_atoms)])
             # output_data.resize(self._num_data_points,refcheck=False)
         #return formatted_data
         return output_data
