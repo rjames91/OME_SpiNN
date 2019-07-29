@@ -465,7 +465,7 @@ class SpiNNakEarVertex(ApplicationVertex,
 
             random.shuffle(fibres)
             #HACK for debug
-            fibres = [0,2,0,2,0,2,0,2,0,2]
+            # fibres = [0,2,0,2,0,2,0,2,0,2]
 
             for j in range(n_ihcs):
                 ihc_index = len(mv_index_list)
