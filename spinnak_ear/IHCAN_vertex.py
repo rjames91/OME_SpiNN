@@ -309,23 +309,15 @@ class IHCANVertex(
             # output_data = numpy.asarray([numpy.nonzero(unpacked_lsr)[0]*(1000./self._fs),numpy.nonzero(unpacked_hsr)[0]*(1000./self._fs)])
             # output_length = unpacked_hsr.size + unpacked_lsr.size
         else:
-            numpy_format = list()
-            numpy_format.append(("AN", numpy.float32))
-            formatted_data = numpy.array(data, dtype=numpy.uint8,copy=True).view(numpy_format)
+            formatted_data = numpy.array(data, dtype=numpy.uint8,copy=True).view(numpy.float32)
             n_seg=numpy.ceil(formatted_data.size/8.)
             split=numpy.split(formatted_data,n_seg)
-            fibre_times = []
             output_length=0
+            output_data=[]
             for fibre_index in range(self._n_atoms):
-                fibre_data = formatted_data[fibre_index::self._n_atoms]
-                unpacked_data = numpy.unpackbits(fibre_data)
-                output_length+=unpacked_data.size
-                fibre_times.append(numpy.nonzero(unpacked_data)[0]*(1000./self._fs))
-            output_data = numpy.asarray(fibre_times)
-            lsr=numpy.concatenate(split[0::2])
-            hsr=numpy.concatenate(split[1::2])
-            output_data = numpy.asarray([lsr,hsr])
-            output_length = hsr.size + lsr.size
+                fibre_data = numpy.asarray(split[fibre_index::self._n_atoms]).flatten()
+                output_data.append(fibre_data)
+                output_length+=fibre_data.size
 
         #check all expected data has been recorded
         if output_length != self._num_data_points:

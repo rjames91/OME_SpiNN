@@ -50,7 +50,7 @@ class SpiNNakEar(AbstractPyNNModel):
         return self._vertex.get_profile_data(vertices=vertices)
 
 #naive in that it assumes the mack or an group cores won't fit onto exisitng chips (an overestimate of n_chips)
-def naive_n_chips_calc(n_channels,n_ears,neuron_pops=None,n_macks=4,n_an_group=2,n_cores_per_chip=15.):
+def naive_n_chips_calc(n_channels,n_ears,neuron_pops=None,n_an_group=2,n_cores_per_chip=15.):
 
     ome_drnl_ihc_chips = 1+int(np.ceil(n_channels/2.))
     n_group_tree_rows = int(np.ceil(math.log((n_channels * 10) / 2., 2.)))

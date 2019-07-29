@@ -94,7 +94,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         self._model = model
         self.param_file = param_file
         self.audio_input = audio_input
-        self.fs = fs
+        self.fs = float(fs)
         self._duration = duration
         self._data_size_bytes = (
             (self.audio_input.size * self._DATA_ELEMENT_TYPE.size) +
@@ -201,7 +201,7 @@ class SpiNNakEarVertex(ApplicationVertex,
                 self._is_recording_moc = True
             elif variable == "debug_values":
                 self._is_recording_debug = True
-                self._is_recording_spikes = False
+                # self._is_recording_spikes = False
             else:
                 raise Exception("recording of " + variable + " not supported by SpiNNak-Ear!")
 
@@ -284,7 +284,7 @@ class SpiNNakEarVertex(ApplicationVertex,
         elif "ihc" in vertex_label:
             if self._is_recording_spikes:
                 sdram_resource_bytes = 15*4 + 1 * self._KEY_ELEMENT_TYPE.size + self._N_FIBRES_PER_IHCAN * np.ceil(self.audio_input.size/8.) * 4
-            elif self._is_recording_debug:
+            if self._is_recording_debug:
                 sdram_resource_bytes = 15*4 + 1 * self._KEY_ELEMENT_TYPE.size + self._N_FIBRES_PER_IHCAN * self.audio_input.size * 4
             else:
                 sdram_resource_bytes = 15*4 + 1 * self._KEY_ELEMENT_TYPE.size
@@ -465,7 +465,7 @@ class SpiNNakEarVertex(ApplicationVertex,
 
             random.shuffle(fibres)
             #HACK for debug
-            # fibres = [0,2,0,2,0,2,0,2,0,2]
+            fibres = [0,2,0,2,0,2,0,2,0,2]
 
             for j in range(n_ihcs):
                 ihc_index = len(mv_index_list)
