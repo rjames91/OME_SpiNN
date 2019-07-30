@@ -389,7 +389,8 @@ class SpiNNakEarVertex(ApplicationVertex,
                 n_hsr = int(mv_type[-1])
                 vertex = IHCANVertex(self._mv_list[parent], 1,
                                     self._ihc_seeds[self._seed_index:self._seed_index + 4],self._is_recording_spikes,
-                                     ear_index=self._ear_index,bitfield=True, profile=False,n_fibres=self._N_FIBRES_PER_IHCAN,n_lsr=n_lsr,n_msr=n_msr,n_hsr=n_hsr)
+                                     ear_index=self._ear_index,bitfield=not self._is_recording_debug, profile=False,n_fibres=self._N_FIBRES_PER_IHCAN,n_lsr=n_lsr,n_msr=n_msr,n_hsr=n_hsr)
+                                     # ear_index=self._ear_index,bitfield=True, profile=False,n_fibres=self._N_FIBRES_PER_IHCAN,n_lsr=n_lsr,n_msr=n_msr,n_hsr=n_hsr)
                 self._seed_index += 4
                 # ensure placement is on the same chip as the parent DRNL
                 vertex.add_constraint(SameChipAsConstraint(self._mv_list[parent]))
